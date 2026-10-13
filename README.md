@@ -6,30 +6,69 @@ FERAL is a multiplayer zombie tag FPS that runs in the browser. One player turns
 
 Built with three.js, Vite, and a small Node WebSocket server that handles all the game logic.
 
-## How it plays
+## Characters
 
-**Survivors** pick a class in the lobby:
-- **SWAT**: M4 rifle and a pistol. Grab ammo crates to keep shooting.
-- **Hunter**: a bow with unlimited arrows. The longer you draw, the harder it hits.
+Every round, one random player becomes the zombie (never the same person twice in a row). Everyone else picks a survivor class in the lobby.
 
-When a survivor goes down, they can still crawl around while bleeding out. A teammate can hold **F** to bring them back with CPR.
+<table>
+  <tr>
+    <th width="33%">SWAT</th>
+    <th width="33%">Hunter</th>
+    <th width="33%">Zombie</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="public/ui/char_gunner.webp" width="220"></td>
+    <td align="center"><img src="public/ui/char_hunter.webp" width="220"></td>
+    <td align="center"><img src="public/ui/char_zombie.webp" width="220"></td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <b>Survivor · Gunner</b><br><br>
+      Carries an <b>M4 rifle</b> (full auto, 30 rounds) and a <b>pistol</b> (14 rounds) as backup.
+      Lots of damage up close, but ammo runs out. Pick up ammo crates around the map to keep shooting.
+    </td>
+    <td valign="top">
+      <b>Survivor · Archer</b><br><br>
+      Uses a <b>bow with unlimited arrows</b>, so no reloading and no ammo hunting.
+      Hold to draw and release to fire. A full draw hits hard and flies far, and a full-draw headshot does double damage.
+      You move slowly while drawing, so timing matters.
+    </td>
+    <td valign="top">
+      <b>The predator</b><br><br>
+      Big, tanky, and slowly regenerates health. Gets tougher the more survivors there are.
+      Stuck in place for the first 5 seconds of the round.
+      Can <b>super jump</b> and slam the ground for area damage, and go into <b>rage</b> to outrun every survivor and heal fast for a few seconds.
+    </td>
+  </tr>
+</table>
 
-**The zombie** is picked at random from the survivors each round (never the same person twice in a row). It's stuck in place for the first 5 seconds, then it gets:
-- a charged super jump that slams the ground on landing
-- a rage mode that makes it faster than any survivor and heals it
+### Getting downed
+
+Survivors don't die right away. At zero health you go down and can still crawl slowly while you bleed out (25 seconds).
+A teammate can hold **F** next to you to do CPR and get you back up. Your bleed-out timer pauses while you're getting CPR.
+If the zombie hits you while you're down, you bleed out faster.
 
 ## Controls
 
-| Key | Survivor | Zombie |
-|---|---|---|
-| WASD / Shift | Move / sprint | Move / sprint |
-| Space | Jump | Tap to jump, hold and release to super jump |
-| Left click | Shoot / draw bow | Punch |
-| R | Reload | Rage |
-| 1 / 2 | Rifle / pistol | |
-| Hold F | Revive a downed teammate | |
-| Ctrl + 1 / 2 / 3 | Dance | Dance |
-| Esc | Menu | Menu |
+**Everyone**
+
+| Key | Action |
+|---|---|
+| WASD | Move |
+| Shift | Sprint (uses stamina) |
+| Mouse | Look around |
+| Ctrl + 1 / 2 / 3 | Dance |
+| Esc | Menu |
+
+**By character**
+
+| Key | SWAT | Hunter | Zombie |
+|---|---|---|---|
+| Left click | Shoot (hold for full auto with the rifle) | Hold to draw, release to shoot | Punch |
+| R | Reload | (no reload needed) | Rage |
+| 1 / 2 | Switch to rifle / pistol | | |
+| Space | Jump | Jump | Tap to jump. Hold, then release to super jump |
+| Hold F | CPR on a downed teammate | CPR on a downed teammate | |
 
 The settings menu has mouse sensitivity, volume, and a Korean/English toggle. You can also start a solo practice round against bots from the lobby.
 
