@@ -1,0 +1,28 @@
+node_modules/
+dist/
+.vite/
+
+# ComfyUI 에서 갓 뽑은 원본 (무겁다, 정리 후 public/models/ 로 옮긴다)
+assets/source/
+
+.DS_Store
+Thumbs.db
+
+# Mixamo 원본 FBX (무겁고 재생성 가능하다 — build_character.py 가 GLB 를 만든다)
+assets/source/
+
+# 배포 묶음 (npm run pack)
+feral.tgz
+
+# 로그 · 임시 산출물
+*.log
+tools/tmp/shots/
+tools/tmp/asset_candidates/
+
+# 외부 실행 파일 (필요하면 따로 받는다)
+tools/cloudflared.exe
+
+# 유튜브에서 받은 음악 (라운드 시작 곡) — 저작권 곡이라 공개 저장소엔 올리지 않는다.
+# 로컬 · 배포 서버(npm run pack)에는 그대로 들어간다. 없으면 게임은 그 소리만 건너뛴다.
+tools/tmp/sfx_src/s_spawn_*
+public/sfx/s_spawn_*

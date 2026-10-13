@@ -1,0 +1,31 @@
+{
+  // 배포는 리눅스 호스팅이다. 윈도우에서 작업해도 LF 로 저장해야
+  // diff 가 통째로 바뀐 것처럼 보이지 않는다 (.gitattributes 와 맞춘다).
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  "editor.tabSize": 2,
+  "editor.rulers": [96],
+
+  // 검색·탐색에서 빼둘 것들
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/dist": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/package-lock.json": true,
+    "assets/source": true
+  },
+  // GLB 와 FBX 는 열어봐야 깨진 글자만 나온다
+  "files.associations": {
+    "*.glb": "binary",
+    "*.fbx": "binary"
+  },
+
+  // shared/ 가 서버와 클라이언트 양쪽에서 import 되므로 경로 자동완성이 중요하다
+  "javascript.preferences.importModuleSpecifierEnding": "js",
+  "javascript.suggest.paths": true
+}

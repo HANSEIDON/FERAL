@@ -1,0 +1,24 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // 게임 서버에 중단점을 걸고 돌린다.
+      // 화면(Vite)은 따로 띄워야 한다:  npm run dev:client
+      "type": "node",
+      "request": "launch",
+      "name": "게임 서버 디버그",
+      "program": "${workspaceFolder}/server/index.js",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      // 브라우저 쪽에 중단점을 건다. 먼저 npm run dev 로 서버를 띄워둘 것.
+      "type": "chrome",
+      "request": "launch",
+      "name": "브라우저 디버그 (5173)",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}"
+    }
+  ]
+}

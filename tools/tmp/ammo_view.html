@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>탄약상자 확인</title>
+<style>html, body { margin: 0; height: 100%; background: #202329; overflow: hidden; } canvas { display: block; }</style>
+</head>
+<body>
+<script type="module">
+// 임시 확인용 — 탄약상자 모델 두 개(소총 · 권총)를 예전 임시 상자 · 사람 키와 나란히 놓고 본다.
+// ?cam=x,y,z  ?target=x,y,z
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { initLoaders, loadModel } from '/src/core/assets.js';
+
+const params = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202329);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x333333, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 2); sun.position.set(3, 5, 4); scene.add(sun);
+scene.add(new THREE.GridHelper(4, 16, 0x555555, 0x333333));
+const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 50);
+camera.position.set(...(params.get('cam') ?? '0,1.1,2.2').split(',').map(Number));
+camera.lookAt(new THREE.Vector3(...(params.get('target') ?? '0,0.2,0').split(',').map(Number)));
+
+initLoaders(renderer);
+const gltf = await loadModel('/models/ammo_props.glb');
+const place = (name, x) => { const o = gltf.scene.getObjectByName(name).clone(); o.position.set(x, 0, 0); o.rotation.y = 0.5; scene.add(o); };
+place('AmmoRifle', -0.45);
+place('AmmoPistol', 0.15);
+// 예전 임시 상자 (0.4 × 0.24 × 0.3)
+const old = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.24, 0.3), new THREE.MeshStandardMaterial({ color: 0x5a6b45 }));
+old.position.set(0.7, 0.12, 0); scene.add(old);
+// 사람 키 1.75m
+const man = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.15, 4, 12), new THREE.MeshBasicMaterial({ color: 0x3d7dff, wireframe: true }));
+man.position.set(1.3, 0.875, -0.3); scene.add(man);
+
+renderer.setAnimationLoop(() => {
+  if (renderer.domElement.width !== Math.floor(innerWidth * devicePixelRatio)) {
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  }
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

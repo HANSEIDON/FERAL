@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>맵 소품 확인</title>
+<style>html, body { margin: 0; height: 100%; background: #222; overflow: hidden; } canvas { display: block; }
+#info { position: fixed; left: 8px; top: 8px; color: #fff; font: 12px monospace; background: rgba(0,0,0,.6); padding: 6px; white-space: pre; }</style>
+</head>
+<body>
+<div id="info"></div>
+<script type="module">
+// 임시 확인용 — map_props.glb 의 모든 노드를 한 줄로 늘어놓고 본다 (중립 조명)
+//   ?only=이름,이름   그것만   ?cam=x,y,z&target=x,y,z   카메라
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { initLoaders, loadModel } from '/src/core/assets.js';
+
+const q = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x30343a);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.DirectionalLight(0xffffff, 1.5).translateX(5).translateY(10).translateZ(8));
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x555a60 }));
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
+initLoaders(renderer);
+const gltf = await loadModel('/models/map_props.glb');
+const only = q.get('only')?.split(',');
+let x = 0;
+const lines = [];
+for (const node of [...gltf.scene.children]) {
+  if (only && !only.includes(node.name)) continue;
+  const b = new THREE.Box3().setFromObject(node), s = b.getSize(new THREE.Vector3());
+  node.position.x = x - b.min.x;
+  x += s.x + 1;
+  scene.add(node);
+  let t = 0;
+  node.traverse((o) => { if (o.isMesh) t += o.geometry.index.count / 3; });
+  lines.push(`${node.name.padEnd(16)} ${s.toArray().map((v) => v.toFixed(2)).join('×')}  ${t} tris  @x ${(node.position.x).toFixed(1)}`);
+}
+document.getElementById('info').textContent = lines.join('\n');
+const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 500);
+const cam = q.get('cam')?.split(',').map(Number) ?? [x / 2, 8, 22];
+const tgt = q.get('target')?.split(',').map(Number) ?? [x / 2, 1.5, 0];
+camera.position.set(...cam);
+camera.lookAt(...tgt);
+if (q.get('noui')) document.getElementById('info').remove();
+renderer.setAnimationLoop(() => {
+  if (renderer.domElement.width !== Math.floor(innerWidth * devicePixelRatio)) {
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  }
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

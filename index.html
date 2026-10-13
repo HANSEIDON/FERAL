@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FERAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700&family=Oswald:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fg: #e9edf4; --muted: #949dae; --line: #2b3140;
+    --zombie: #86c232; --surv: #5b9bff; --bad: #ef5f5f; --good: #4ec77f; --warn: #e8b23a;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    background: #0e1014; color: var(--fg);
+    font: 14px/1.5 ui-sans-serif, "Malgun Gothic", system-ui, sans-serif;
+    user-select: none;
+  }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* ================= 인게임 HUD ================= */
+  /* 메뉴와 같은 톤 — 어두운 반투명 판 · 나트륨 주황 · 피 빨강. 숫자는 Oswald */
+  #hud { --amber: #ffb46e; --blood: #d23a32; --steel: #8e97a6; --panel: #05070bb3;
+         --hud: 'Oswald', 'Noto Sans KR', sans-serif;
+         position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s;
+         font-family: var(--hud); color: #ece6dc; text-shadow: 0 1px 6px #000c; }
+  body.in-round #hud { opacity: 1; }
+  html[lang=ko] #hud .ko { font-family: 'Noto Sans KR', sans-serif; }
+
+  /* 조준점 — 가운데 점 + 네 가닥 */
+  #cross { position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; opacity: .9;
+           background: radial-gradient(circle, #fff 0 1.5px, transparent 2px);
+           transition: transform .08s; }
+  #cross::before, #cross::after { content: ""; position: absolute; background: transparent; }
+  #cross::before { left: 10px; top: 0; width: 2px; height: 22px;
+                   background: linear-gradient(#fff 0 6px, transparent 6px 16px, #fff 16px); }
+  #cross::after { top: 10px; left: 0; height: 2px; width: 22px;
+                  background: linear-gradient(90deg, #fff 0 6px, transparent 6px 16px, #fff 16px); }
+  body.is-zombie #cross { background: radial-gradient(circle, var(--blood) 0 2px, transparent 2.5px); }
+  body.is-zombie #cross::before { background: linear-gradient(var(--blood) 0 5px, transparent 5px 17px, var(--blood) 17px); }
+  body.is-zombie #cross::after { background: linear-gradient(90deg, var(--blood) 0 5px, transparent 5px 17px, var(--blood) 17px); }
+  /* 근접 무기 — 빨강 = 지금 때리면 맞는다, 주황 = 사거리 밖 */
+  body.cross-hot #cross { transform: scale(1.5); }
+  body.cross-hot #cross::before { background: linear-gradient(#ff4b3e 0 6px, transparent 6px 16px, #ff4b3e 16px); }
+  body.cross-hot #cross::after { background: linear-gradient(90deg, #ff4b3e 0 6px, transparent 6px 16px, #ff4b3e 16px); }
+  body.cross-near #cross::before { background: linear-gradient(var(--amber) 0 6px, transparent 6px 16px, var(--amber) 16px); }
+  body.cross-near #cross::after { background: linear-gradient(90deg, var(--amber) 0 6px, transparent 6px 16px, var(--amber) 16px); }
+
+  /* 명중 표시 — 조준점 위 X */
+  #hitmark { position: fixed; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px;
+             opacity: 0; transition: opacity .1s; }
+  #hitmark.show { opacity: 1; }
+  #hitmark::before, #hitmark::after { content: ""; position: absolute; left: 12px; top: 0; width: 2px; height: 26px;
+    background: linear-gradient(#fff 0 8px, transparent 8px 18px, #fff 18px); }
+  #hitmark::before { transform: rotate(45deg); }
+  #hitmark::after { transform: rotate(-45deg); }
+  #hitmark.head::before, #hitmark.head::after { background: linear-gradient(var(--blood) 0 8px, transparent 8px 18px, var(--blood) 18px); }
+
+  /* 피격 섬광 · 빈사(체력 30% 아래) 테두리 */
+  #damage { position: fixed; inset: 0; opacity: 0; box-shadow: inset 0 0 140px 40px #c81e1ec0; }
+  #damage.on { animation: dmg .42s ease-out; }
+  @keyframes dmg { from { opacity: 1; } to { opacity: 0; } }
+  #lowhp { position: fixed; inset: 0; opacity: 0; transition: opacity .4s;
+           background: radial-gradient(ellipse at center, transparent 55%, #6e0a0a99 100%); }
+  body.low-hp #lowhp { opacity: 1; animation: beat 1.1s ease-in-out infinite; }
+  @keyframes beat { 0%, 100% { opacity: .55; } 45% { opacity: 1; } }
+
+  /* ── 위: 남은 시간 ── */
+  #topbar { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); text-align: center; }
+  #timer { min-width: 120px; padding: 4px 22px 2px; font-size: 30px; font-weight: 500; letter-spacing: .08em;
+           font-variant-numeric: tabular-nums; background: var(--panel);
+           clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 100%, 0 100%); }
+  #timer:empty { display: none; }
+  #timer.urgent { color: var(--blood); }
+  #timer.hold { color: var(--amber); font-size: 64px; background: none; }
+  #holdHint { display: none; margin-top: 4px; font-size: 13px; letter-spacing: .05em; color: var(--amber); }
+
+  /* ── 오른쪽 위: 알림 ── */
+  #feed { position: absolute; right: 22px; top: 18px; width: 320px; list-style: none; margin: 0; padding: 0;
+          font: 13px/1.45 'Noto Sans KR', var(--hud); }
+  #feed li { background: var(--panel); border-left: 3px solid var(--steel); padding: 7px 12px; margin-bottom: 5px;
+             animation: feedIn .25s ease-out; }
+  @keyframes feedIn { from { opacity: 0; transform: translateX(14px); } }
+  #feed li.good { border-color: #6fbf73; }
+  #feed li.warn { border-color: var(--amber); }
+  #feed li.bad { border-color: var(--blood); }
+  #fps { position: absolute; right: 22px; bottom: 8px; font-size: 11px; color: #8e97a688; font-variant-numeric: tabular-nums; }
+  #fps.bad { color: var(--blood); }
+  #practiceTag { display: none; position: absolute; top: 18px; left: 22px; font-size: 12px; letter-spacing: .12em;
+                 color: var(--amber); background: var(--panel); padding: 5px 10px; }
+
+  /* ── 왼쪽 아래: 체력 · 스태미나 · (쓰러지면) 출혈 · (좀비) 광폭화 ── */
+  #vitals { position: absolute; left: 24px; bottom: 22px; width: 300px; }
+  .vt-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  #role { font-size: 22px; font-weight: 500; letter-spacing: .1em; }
+  #role.zombie { color: var(--blood); }
+  #role.survivor { color: var(--amber); }
+  #weapon { font-size: 12px; letter-spacing: .16em; color: var(--steel); }
+  .vrow { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .vlab { width: 62px; flex: none; font-size: 11px; letter-spacing: .16em; color: var(--steel); }
+  .seg { position: relative; flex: 1; height: 12px; background: #ffffff14; transform: skewX(-18deg); overflow: hidden; }
+  .seg > i { position: absolute; inset: 0 auto 0 0; width: 100%; display: block; transition: width .15s linear;
+             -webkit-mask: repeating-linear-gradient(90deg, #000 0 22px, transparent 22px 25px);
+             mask: repeating-linear-gradient(90deg, #000 0 22px, transparent 22px 25px); }
+  .seg.thin { height: 5px; }
+  .seg.thin > i { -webkit-mask: none; mask: none; }
+  #hpFill { background: linear-gradient(90deg, #e9e3d8, #fff6ea); }
+  body.low-hp #hpFill { background: linear-gradient(90deg, #a01d17, var(--blood)); }
+  #stamFill { background: #7fa7d9; }
+  #hpText { width: 46px; text-align: right; font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1; }
+  #bleed, #bleedHint, #abil { display: none; }
+  body.is-downed #hpRow, body.is-downed #stamina { display: none; }
+  body.is-downed #bleed { display: flex; }
+  body.is-downed #bleedHint { display: block; }
+  #bleed .vlab { color: var(--blood); }
+  #bleedFill { background: linear-gradient(90deg, #7d110d, var(--blood)); animation: beat 1s ease-in-out infinite; }
+  #bleedText { width: 46px; text-align: right; font-size: 24px; color: var(--blood); font-variant-numeric: tabular-nums; }
+  #bleedHint { font-size: 12px; color: #d9d3c9; margin-top: 2px; }
+  body.is-zombie #abil { display: flex; }
+  #abil { align-items: center; gap: 10px; margin-top: 4px; }
+  #abil .key { width: 24px; height: 24px; display: grid; place-items: center; font-size: 13px; font-weight: 500;
+               border: 1px solid #ffffff40; background: var(--panel); }
+  #abil .nm { width: 62px; font-size: 12px; letter-spacing: .12em; color: var(--steel); }
+  #abil .seg { height: 6px; }
+  #abil .seg > i { -webkit-mask: none; mask: none; background: var(--blood); }
+  #rageText { width: 64px; text-align: right; font-size: 13px; letter-spacing: .1em; color: var(--steel); }
+  #abil.ready .key { border-color: var(--blood); color: var(--blood); }
+  #abil.ready #rageText { color: var(--blood); }
+  #abil.active .key { background: var(--blood); color: #fff; }
+  #abil.active #rageText { color: #fff; }
+
+  /* ── 오른쪽 아래: 무기 · 탄약 ── */
+  #ammo { position: absolute; right: 26px; bottom: 58px; text-align: right; display: none; }
+  #ammoWeapon { font-size: 12px; letter-spacing: .2em; color: var(--steel); margin-bottom: 2px; }
+  #ammoNum { font-size: 54px; font-weight: 500; line-height: .9; font-variant-numeric: tabular-nums; }
+  #ammoNum.low { color: var(--amber); }
+  #ammoNum.empty { color: var(--blood); }
+  #ammoMag { font-size: 18px; color: var(--steel); margin-left: 4px; }
+  #ammoReserve { font-size: 14px; color: var(--steel); letter-spacing: .1em; font-variant-numeric: tabular-nums; }
+  #reload { display: none; margin-top: 6px; width: 150px; margin-left: auto; }
+  #reload > i { display: block; height: 4px; width: 0; background: var(--amber); }
+  #reload > span { display: block; font-size: 11px; letter-spacing: .25em; color: var(--amber); margin-top: 3px; }
+  #slots { display: none; position: absolute; right: 26px; bottom: 22px; gap: 6px; }
+  .slot { font-size: 12px; letter-spacing: .1em; color: var(--steel); background: var(--panel); padding: 4px 10px;
+          border-bottom: 2px solid transparent; }
+  .slot.on { color: #ece6dc; border-bottom-color: var(--amber); }
+  .slot b { color: var(--amber); margin-right: 6px; font-weight: 500; }
+
+  /* ── 가운데 아래: 충전 · 일으키기 · 안내 ── */
+  #chargeBar, #reviveBar { display: none; position: absolute; left: 50%; transform: translateX(-50%); width: 220px; text-align: center; }
+  #chargeBar { bottom: 140px; }
+  #reviveBar { top: 60%; }
+  #chargeBar span, #reviveBar span { display: block; font-size: 11px; letter-spacing: .3em; margin-bottom: 5px; }
+  #chargeBar span { color: var(--amber); }
+  #reviveBar span { color: #6fbf73; }
+  #chargeBar > div, #reviveBar > div { height: 6px; background: #ffffff1c; transform: skewX(-18deg); overflow: hidden; }
+  #chargeFill, #reviveFill { display: block; height: 100%; width: 0; }
+  #chargeFill { background: var(--amber); }
+  #chargeFill.full { background: var(--blood); }
+  #reviveFill { background: #6fbf73; }
+  #hint { display: none; position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%);
+          background: var(--panel); padding: 7px 16px; font: 13px 'Noto Sans KR', var(--hud); letter-spacing: .02em; }
+
+  /* ── 쓰러진 동료 위 표시 (출혈 남은 시간) ── */
+  #marks { position: fixed; inset: 0; }
+  .mark { position: absolute; transform: translate(-50%, -100%); text-align: center; width: 92px; }
+  .mark .ic { width: 18px; height: 18px; margin: 0 auto 3px; position: relative; }
+  .mark .ic::before, .mark .ic::after { content: ""; position: absolute; background: var(--blood); }
+  .mark .ic::before { left: 7px; top: 0; width: 4px; height: 18px; }
+  .mark .ic::after { top: 7px; left: 0; height: 4px; width: 18px; }
+  .mark .lb { font-size: 10px; letter-spacing: .2em; color: #ece6dc; }
+  .mark .bar { height: 4px; background: #ffffff22; margin-top: 3px; }
+  .mark .bar i { display: block; height: 100%; background: var(--blood); }
+  .mark .d { font-size: 10px; color: var(--steel); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  /* ── 결과 ── */
+  #result { display: none; position: absolute; left: 0; right: 0; top: 36%; transform: translateY(-50%); }
+  #result .band { padding: 26px 0 22px; text-align: center; background: linear-gradient(90deg, transparent, #05070be6 25%, #05070be6 75%, transparent);
+                  animation: band .5s cubic-bezier(.2,.8,.2,1); }
+  @keyframes band { from { opacity: 0; letter-spacing: .4em; } }
+  #resultTitle { margin: 0; font: 400 clamp(46px, 6vw, 88px)/1 'Anton', var(--hud); letter-spacing: .08em; }
+  html[lang=ko] #resultTitle { font-family: 'Black Han Sans', var(--hud); letter-spacing: .02em; }
+  #result.zombie #resultTitle { color: var(--blood); }
+  #result.survivor #resultTitle { color: var(--amber); }
+  #resultWhy { margin-top: 8px; font: 15px 'Noto Sans KR', var(--hud); color: #d9d3c9; letter-spacing: .05em; }
+
+  /* ================= 시작 화면 · 메뉴 · 대기실 ================= */
+  /* 밤 야적장 톤 — 나트륨 가로등 주황, 피 빨강, 차가운 강철 회색 */
+  #ui { --amber: #ffb46e; --amber-d: #c9773a; --blood: #c8322c; --steel: #8e97a6; --ink: #06080c;
+        --ui: 'Oswald', 'Noto Sans KR', sans-serif; --ko: 'Black Han Sans', 'Noto Sans KR', sans-serif;
+        position: fixed; inset: 0; z-index: 10; font-family: var(--ui); color: #e8e3da; }
+  #ui section { position: absolute; inset: 0; display: none; }
+  #ui[data-screen=title] #scrTitle, #ui[data-screen=main] #scrTitle,
+  #ui[data-screen=lobby] #scrLobby, #ui[data-screen=pause] #scrPause { display: block; }
+  #ui button { font-family: inherit; cursor: pointer; }
+  .logo { font-family: 'Anton', sans-serif; letter-spacing: .07em; line-height: .86; color: #efe8dd;
+          background: linear-gradient(180deg, #f6f0e6 30%, #a99c89); -webkit-background-clip: text; background-clip: text;
+          -webkit-text-fill-color: transparent; filter: drop-shadow(0 6px 24px #000c); }
+  .slash { display: block; height: 4px; width: 46%; margin-top: 14px;
+           background: linear-gradient(90deg, var(--blood), transparent); }
+
+  /* ── 타이틀 ── */
+  #scrTitle { overflow: hidden; background: var(--ink); }
+  .keyart { position: absolute; inset: -3%; background: url(./ui/keyart.webp) 62% center / cover;
+            animation: kenburns 38s ease-in-out infinite alternate; }
+  @keyframes kenburns { from { transform: scale(1.02) translate(0, 0); } to { transform: scale(1.1) translate(-1.5%, -1%); } }
+  .rain { position: absolute; inset: -20% -10%; pointer-events: none; opacity: .5;
+          background-image: repeating-linear-gradient(103deg, transparent 0 22px, #c8d4ea0d 22px 23px),
+                            repeating-linear-gradient(97deg, transparent 0 37px, #c8d4ea08 37px 38px);
+          animation: rain .45s linear infinite; }
+  @keyframes rain { to { transform: translate(-46px, 120px); } }
+  .vignette { position: absolute; inset: 0; pointer-events: none;
+              background: radial-gradient(ellipse at 62% 45%, transparent 35%, #000a 100%),
+                          linear-gradient(0deg, #000c, transparent 28%); }
+  .shade { position: absolute; inset: 0; pointer-events: none; opacity: 0; transform: translateX(-12%);
+           transition: opacity .7s ease, transform .9s cubic-bezier(.2,.8,.2,1);
+           background: linear-gradient(90deg, #04060aF5 0%, #04060ae0 26%, #04060a88 42%, transparent 60%); }
+  #scrTitle.open .shade { opacity: 1; transform: none; }
+  .brand { position: absolute; left: 7vw; top: 50%; transform: translateY(-50%);
+           transition: top .8s cubic-bezier(.2,.8,.2,1), transform .8s cubic-bezier(.2,.8,.2,1); }
+  .brand .logo { font-size: clamp(84px, 11vw, 200px); }
+  .brand .tagline { margin-top: 18px; font-size: clamp(13px, 1.1vw, 17px); letter-spacing: .32em; color: var(--steel);
+                    text-transform: uppercase; }
+  html[lang=ko] .brand .tagline { letter-spacing: .12em; font-family: var(--ko); }
+  #scrTitle.open .brand { top: 13vh; transform: none; }
+  #scrTitle.open .brand .logo { font-size: clamp(64px, 7.2vw, 130px); }
+  .brand .logo { transition: font-size .8s cubic-bezier(.2,.8,.2,1); }
+  .press { position: absolute; left: 0; right: 0; bottom: 9vh; text-align: center; font-size: 15px; letter-spacing: .5em;
+           color: #f1e9de; animation: pulse 2.2s ease-in-out infinite; transition: opacity .3s; }
+  html[lang=ko] .press { letter-spacing: .25em; font-family: var(--ko); }
+  .press::before, .press::after { content: ""; display: inline-block; width: 60px; height: 1px; background: #f1e9de66;
+                                  vertical-align: middle; margin: 0 22px; }
+  @keyframes pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+  #scrTitle.open .press { opacity: 0; animation: none; pointer-events: none; }
+
+  /* ── 메인 패널 (왼쪽 어둠 속) ── */
+  .panel { position: absolute; left: 7vw; width: min(380px, 80vw); }
+  #mainPanel { top: calc(13vh + clamp(64px, 7.2vw, 130px) * .86 + 90px); opacity: 0; pointer-events: none;
+               transform: translateX(-20px); transition: opacity .5s .35s, transform .6s .35s; }
+  #scrTitle.open #mainPanel { opacity: 1; pointer-events: auto; transform: none; }
+  .view { display: none; }
+  .view.on { display: block; animation: viewIn .35s ease both; }
+  @keyframes viewIn { from { opacity: 0; transform: translateX(-10px); } }
+  .field { display: block; margin-bottom: 26px; }
+  .field span { display: block; font-size: 11px; letter-spacing: .3em; color: var(--steel); margin-bottom: 7px; }
+  .field input { width: 100%; background: #ffffff08; border: 0; border-bottom: 1px solid #ffffff2e; color: #f3ede4;
+                 font: 500 20px var(--ui); letter-spacing: .06em; padding: 8px 2px; outline: none; transition: border-color .2s; }
+  .field input:focus { border-bottom-color: var(--amber); }
+  .field input:disabled { color: var(--steel); }
+  .shake { animation: shake .35s; border-bottom-color: var(--blood) !important; }
+  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  .mi { display: block; width: 100%; text-align: left; background: none; border: 0; color: #d9d3c9; padding: 9px 0 9px 0;
+        font-size: clamp(24px, 2.2vw, 34px); font-weight: 500; letter-spacing: .08em; position: relative;
+        transition: color .18s, padding-left .22s cubic-bezier(.2,.8,.2,1); outline: none; }
+  html[lang=ko] .mi { font-family: var(--ko); letter-spacing: .02em; font-weight: 400; }
+  .mi::before { content: ""; position: absolute; left: 0; top: 50%; width: 0; height: 3px; background: var(--amber);
+                transform: translateY(-50%); transition: width .22s cubic-bezier(.2,.8,.2,1); }
+  .mi:hover, .mi:focus-visible, .mi:focus { color: var(--amber); padding-left: 34px; }
+  .mi:hover::before, .mi:focus::before { width: 22px; }
+  .mi.small { font-size: 16px; letter-spacing: .25em; color: var(--steel); margin-top: 18px; }
+  html[lang=ko] .mi.small { letter-spacing: .1em; }
+  .mi.lang.on { color: var(--amber); }
+  .mi.lang.on::after { content: "●"; font-size: 10px; margin-left: 12px; vertical-align: middle; }
+  .vhead { font-size: 12px; letter-spacing: .35em; color: var(--steel); margin-bottom: 14px; }
+  .opt { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid #ffffff12; }
+  .opt label { flex: 1; font-size: 15px; letter-spacing: .04em; color: #d9d3c9; }
+  html[lang=ko] .opt label { font-family: 'Noto Sans KR', sans-serif; font-size: 14px; }
+  .opt input[type=range] { width: 150px; accent-color: var(--amber); }
+  .opt input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--amber); }
+  .vval { width: 34px; text-align: right; font-variant-numeric: tabular-nums; color: var(--amber); }
+  #sensVal { width: 34px; text-align: right; font-variant-numeric: tabular-nums; color: var(--amber); }
+  .note { font: 12px/1.6 'Noto Sans KR', sans-serif; color: var(--steel); margin: 12px 0 0; }
+  .conn { position: absolute; left: 7vw; bottom: 5vh; font-size: 11px; letter-spacing: .3em; color: var(--blood); }
+  .conn::before { content: "●"; margin-right: 8px; }
+  .conn.ok { color: #6fbf73; }
+  #scrTitle:not(.open) .conn { opacity: 0; }
+
+  /* ── 대기실 · 캐릭터 선택 ── */
+  #scrLobby { --px: 0; --py: 0; overflow: hidden;
+              background: radial-gradient(ellipse at 40% 85%, #2a1a0e66, transparent 55%),
+                          radial-gradient(ellipse at 50% 40%, #0e121acc, #030406f2 75%); }
+  #scrLobby::before { content: "FERAL"; position: absolute; left: -2vw; bottom: -6vh; font: 34vw/0.8 'Anton', sans-serif;
+                      color: transparent; -webkit-text-stroke: 1px #ffffff09; letter-spacing: .04em; pointer-events: none; }
+  .lhead { position: absolute; left: 4vw; right: 4vw; top: 4vh; display: flex; align-items: center; gap: 22px; }
+  .lhead .logo { font-size: 44px; }
+  .lhead .crumb { font-size: 13px; letter-spacing: .4em; color: var(--steel); border-left: 1px solid #ffffff26; padding-left: 22px; }
+  html[lang=ko] .lhead .crumb { font-family: var(--ko); letter-spacing: .15em; font-size: 15px; }
+  .lhead .sp { flex: 1; }
+  .lhead .mi.small { width: auto; margin: 0; }
+  .ltitle { position: absolute; left: 4vw; top: 13vh; font-size: 13px; letter-spacing: .45em; color: var(--amber); }
+  html[lang=ko] .ltitle { font-family: var(--ko); letter-spacing: .2em; font-size: 16px; }
+  .stage { position: absolute; left: 4vw; right: calc(4vw + 330px); top: 18vh; bottom: 9vh;
+           display: flex; gap: 1.6vw; align-items: stretch; }
+  .hero { position: relative; flex: 1 1 0; min-width: 0; max-width: 400px; background: linear-gradient(180deg, #ffffff05, #ffffff0b);
+          border: 1px solid #ffffff14; color: inherit; text-align: left; padding: 0; overflow: hidden;
+          clip-path: polygon(0 0, 100% 0, 100% calc(100% - 28px), calc(100% - 28px) 100%, 0 100%);
+          transition: border-color .25s, background .25s, transform .35s cubic-bezier(.2,.8,.2,1); }
+  .hero:hover { border-color: #ffffff30; transform: translateY(-4px); }
+  .hero.on { border-color: var(--amber); background: linear-gradient(180deg, #ffb46e0a, #ffb46e1a); }
+  .hero .spot { position: absolute; inset: 0; opacity: 0; transition: opacity .4s;
+                background: radial-gradient(ellipse at 50% 72%, #ffb46e40, transparent 58%); }
+  .hero.on .spot { opacity: 1; }
+  .hero .num { position: absolute; left: 18px; top: 10px; font: 70px/1 'Anton', sans-serif; color: transparent;
+               -webkit-text-stroke: 1px #ffffff26; transition: -webkit-text-stroke-color .3s; }
+  .hero.on .num { -webkit-text-stroke-color: #ffb46e88; }
+  .hero img { position: absolute; left: 50%; bottom: 25%; height: 72%; max-width: 92%; object-fit: contain; object-position: bottom;
+              transform: translate(calc(-50% + var(--px) * -14px), calc(var(--py) * -8px));
+              filter: grayscale(.9) brightness(.45) contrast(1.1); transition: filter .4s, height .45s cubic-bezier(.2,.8,.2,1); }
+  .hero:hover img { filter: grayscale(.35) brightness(.8); }
+  .hero.on img { filter: drop-shadow(0 0 28px #ffb46e33) brightness(1.05); height: 76%; }
+  .hero .floor { position: absolute; left: 10%; right: 10%; bottom: 24%; height: 18px; border-radius: 50%;
+                 background: radial-gradient(ellipse, #000c, transparent 70%); }
+  .hero .info { position: absolute; left: 22px; right: 22px; bottom: 22px; }
+  .hero .role { font-size: 11px; letter-spacing: .4em; color: var(--steel); }
+  .hero h3 { margin: 2px 0 6px; font: 400 clamp(34px, 3.1vw, 50px)/1 'Anton', sans-serif; letter-spacing: .05em; }
+  html[lang=ko] .hero h3 { font-family: var(--ko); letter-spacing: 0; }
+  .hero.on h3 { color: var(--amber); }
+  .hero .desc { font: 13px/1.5 'Noto Sans KR', sans-serif; color: #b9b3a9; margin: 0 0 12px; min-height: 2.9em; }
+  .stats { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; align-items: center; margin-bottom: 12px; }
+  .stats span { font-size: 10.5px; letter-spacing: .2em; color: var(--steel); }
+  html[lang=ko] .stats span { font-family: 'Noto Sans KR'; letter-spacing: .05em; font-size: 11px; }
+  .stats i { display: flex; gap: 3px; }
+  .stats i b { flex: 1; height: 5px; background: #ffffff1a; transform: skewX(-20deg); }
+  .stats i b.f { background: #e8e3da; }
+  .hero.on .stats i b.f { background: var(--amber); }
+  .hero .wpn { font-size: 12px; letter-spacing: .15em; color: #d9d3c9; border-top: 1px solid #ffffff14; padding-top: 10px; }
+  html[lang=ko] .hero .wpn { font-family: 'Noto Sans KR'; letter-spacing: .03em; }
+  .hero .badge { position: absolute; right: 0; top: 18px; background: var(--amber); color: #120a03; font-size: 11px;
+                 letter-spacing: .3em; padding: 5px 12px 5px 14px; transform: translateX(105%); transition: transform .3s cubic-bezier(.2,.8,.2,1); }
+  .hero.on .badge { transform: none; }
+  .hero.infected { cursor: default; border-color: #c8322c33; background: linear-gradient(180deg, #c8322c08, #c8322c14); flex-grow: .85; }
+  .hero.infected:hover { transform: none; }
+  .hero.infected img { filter: brightness(.22) sepia(1) hue-rotate(-30deg) saturate(3.5) contrast(1.3); height: 66%; }
+  .hero.infected .spot { opacity: 1; background: radial-gradient(ellipse at 50% 70%, #c8322c2e, transparent 60%); }
+  .hero.infected h3 { color: var(--blood); }
+  .hero.infected .q { position: absolute; left: 50%; top: 34%; transform: translateX(-50%); font: 120px/1 'Anton'; color: #c8322c55; }
+  .squad { position: absolute; right: 4vw; top: 18vh; bottom: 9vh; width: 310px; display: flex; flex-direction: column; }
+  .squad .vhead { display: flex; justify-content: space-between; color: var(--steel); }
+  html[lang=ko] .squad .vhead { font-family: var(--ko); letter-spacing: .15em; font-size: 14px; }
+  #roster { list-style: none; margin: 0 0 18px; padding: 0; flex: 1; overflow: auto; }
+  #roster li { display: flex; align-items: center; gap: 10px; padding: 11px 14px; margin-bottom: 6px;
+               background: #ffffff07; border-left: 2px solid #ffffff22; font-size: 15px; letter-spacing: .04em; }
+  #roster li.me { border-left-color: var(--amber); background: #ffb46e10; }
+  #roster .rn { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Noto Sans KR', var(--ui); }
+  #roster em { font-style: normal; font-size: 10px; letter-spacing: .25em; color: #120a03; background: var(--amber); padding: 2px 6px; }
+  #roster .rc { font-size: 11px; letter-spacing: .2em; color: var(--steel); }
+  .cta { display: block; width: 100%; border: 0; padding: 16px 18px; font-size: 22px; letter-spacing: .14em; text-align: left;
+         clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%); transition: filter .2s, background .2s; }
+  html[lang=ko] .cta { font-family: var(--ko); letter-spacing: .05em; }
+  .cta small { display: block; font: 11px 'Noto Sans KR', sans-serif; letter-spacing: .05em; opacity: .7; margin-top: 2px; }
+  .cta.primary { background: var(--amber); color: #120a03; }
+  .cta.primary:hover:not(:disabled) { filter: brightness(1.1); }
+  .cta.primary:disabled { background: #ffffff10; color: #ffffff55; cursor: default; }
+  .cta.ghost { margin-top: 8px; background: #ffffff0c; color: #e8e3da; }
+  .cta.ghost:hover { background: #ffffff18; }
+  #practiceBox { max-height: 0; overflow: hidden; transition: max-height .35s ease; }
+  #practiceBox.open { max-height: 320px; }
+  #practiceBox .inner { padding: 6px 2px 0; }
+  .prow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #ffffff10; }
+  .prow label { width: 76px; flex: none; font: 12px 'Noto Sans KR', sans-serif; color: var(--steel); }
+  .prow select { flex: 1; min-width: 0; background: #0c0f14; border: 1px solid #ffffff1f; color: #e8e3da; padding: 6px 8px;
+                 font: 12.5px 'Noto Sans KR', sans-serif; }
+  #pStart { margin-top: 10px; font-size: 16px; padding: 12px 16px; }
+  .lfoot { position: absolute; left: 4vw; bottom: 3.5vh; font: 11.5px 'Noto Sans KR', sans-serif; color: #8e97a6aa; letter-spacing: .03em; }
+  #scrLobby .conn { left: auto; right: 4vw; bottom: 3.5vh; }
+  @media (max-width: 1100px) { .hero.infected { display: none; } }
+
+  /* ── 일시정지 ── */
+  #scrPause { background: linear-gradient(90deg, #04060af2 0%, #04060acc 34%, #04060a66 60%, #04060a33); }
+  #pausePanel { top: 22vh; }
+  #pausePanel .logo { font-size: 54px; margin-bottom: 6px; }
+  #pausePanel .vhead.big { font-size: 15px; letter-spacing: .5em; color: var(--amber); margin: 10px 0 30px; }
+  html[lang=ko] #pausePanel .vhead.big { font-family: var(--ko); letter-spacing: .2em; }
+  #scrPause .lfoot { left: 7vw; }
+
+</style>
+</head>
+<body>
+
+<canvas id="view"></canvas>
+
+<div id="hud">
+  <div id="damage"></div>
+  <div id="lowhp"></div>
+  <div id="marks"></div>
+  <div id="cross"></div>
+  <div id="hitmark"></div>
+
+  <div id="topbar">
+    <div id="timer"></div>
+    <div id="holdHint" class="ko" data-i18n="holdHint"></div>
+  </div>
+  <div id="practiceTag" data-i18n="practiceTag"></div>
+  <ul id="feed"></ul>
+  <div id="fps"></div>
+
+  <div id="vitals">
+    <div class="vt-head"><span id="role">—</span><span id="weapon"></span></div>
+    <div class="vrow" id="hpRow"><span class="vlab" data-i18n="hp"></span><div class="seg"><i id="hpFill"></i></div><b id="hpText">0</b></div>
+    <div class="vrow" id="stamina"><span class="vlab" data-i18n="stamina"></span><div class="seg thin"><i id="stamFill"></i></div></div>
+    <div class="vrow" id="bleed"><span class="vlab" data-i18n="bleeding"></span><div class="seg"><i id="bleedFill"></i></div><b id="bleedText"></b></div>
+    <div id="bleedHint" class="ko" data-i18n="crawlHint"></div>
+    <div id="abil"><span class="key">R</span><span class="nm" data-i18n="rage"></span><div class="seg"><i id="rageFill"></i></div><b id="rageText"></b></div>
+  </div>
+
+  <div id="ammo">
+    <div id="ammoWeapon"></div>
+    <div><span id="ammoNum">0</span><span id="ammoMag"></span></div>
+    <div id="ammoReserve"></div>
+    <div id="reload"><i id="reloadFill"></i><span data-i18n="reloading"></span></div>
+  </div>
+  <div id="slots"></div>
+
+  <div id="chargeBar"><span></span><div><i id="chargeFill"></i></div></div>
+  <div id="reviveBar"><span data-i18n="reviving"></span><div><i id="reviveFill"></i></div></div>
+  <div id="hint"></div>
+
+  <div id="result"><div class="band"><h3 id="resultTitle"></h3><div id="resultWhy"></div></div></div>
+</div>
+
+<div id="ui" data-screen="title">
+
+  <!-- 타이틀 · 메인 메뉴 -->
+  <section id="scrTitle">
+    <div class="keyart"></div>
+    <div class="rain"></div>
+    <div class="vignette"></div>
+    <div class="shade"></div>
+    <div class="brand">
+      <div class="logo">FERAL</div>
+      <i class="slash"></i>
+    </div>
+    <div class="press" data-i18n="pressAny"></div>
+
+    <nav class="panel" id="mainPanel">
+      <div class="view on" id="mainList">
+        <label class="field"><span data-i18n="callsign"></span>
+          <input type="text" id="name" maxlength="12" autocomplete="off" spellcheck="false" data-i18n-ph="namePh"></label>
+        <button class="mi" id="mPlay" data-sfx="whoosh" data-i18n="play"></button>
+        <button class="mi" id="mSettings" data-sfx="whoosh" data-i18n="settings"></button>
+        <button class="mi" id="mLang" data-sfx="whoosh" data-i18n="language"></button>
+      </div>
+      <div class="view" id="mainSettings" data-settings="1">
+        <div class="vhead" data-i18n="settings"></div>
+        <div id="settingsSlotMain">
+          <div id="settingsBox">
+            <div class="opt"><label data-i18n="sens"></label>
+              <input type="range" id="sens" min="0.0004" max="0.006" step="0.0002"><span id="sensVal"></span></div>
+            <div class="opt"><label data-i18n="invertY"></label><input type="checkbox" id="invertY"></div>
+            <div class="opt"><label data-i18n="volMaster"></label>
+              <input type="range" id="vol_master" min="0" max="100" step="1"><span id="vol_masterVal" class="vval"></span></div>
+            <div class="opt"><label data-i18n="volSfx"></label>
+              <input type="range" id="vol_sfx" min="0" max="100" step="1"><span id="vol_sfxVal" class="vval"></span></div>
+            <div class="opt"><label data-i18n="volMusic"></label>
+              <input type="range" id="vol_music" min="0" max="100" step="1"><span id="vol_musicVal" class="vval"></span></div>
+            <p class="note" data-i18n="settingsNote"></p>
+          </div>
+        </div>
+        <button class="mi small" data-back data-i18n="back"></button>
+      </div>
+      <div class="view" id="langList">
+        <div class="vhead" data-i18n="language"></div>
+        <div id="langOpts"></div>
+        <button class="mi small" data-back data-i18n="back"></button>
+      </div>
+    </nav>
+    <div class="conn" data-i18n="connecting"></div>
+  </section>
+
+  <!-- 대기실 · 캐릭터 선택 -->
+  <section id="scrLobby">
+    <div class="lhead">
+      <div class="logo">FERAL</div>
+      <div class="crumb" data-i18n="lobby"></div>
+      <div class="sp"></div>
+      <button class="mi small" id="lBack" data-sfx="whoosh" data-i18n="back"></button>
+    </div>
+    <div class="ltitle" data-i18n="chooseSurvivor"></div>
+
+    <div class="stage">
+      <button class="hero" data-class="archer">
+        <div class="spot"></div><div class="num">01</div><div class="badge" data-i18n="selected"></div>
+        <div class="floor"></div><img src="./ui/char_hunter.webp" alt="" draggable="false">
+        <div class="info">
+          <div class="role" data-i18n="survivor"></div>
+          <h3 data-i18n="hunter.name"></h3>
+          <p class="desc" data-i18n="hunter.desc"></p>
+          <div class="stats">
+            <span data-i18n="stat.power"></span><i><b class="f"></b><b class="f"></b><b class="f"></b><b class="f"></b><b></b></i>
+            <span data-i18n="stat.range"></span><i><b class="f"></b><b class="f"></b><b class="f"></b><b class="f"></b><b class="f"></b></i>
+            <span data-i18n="stat.mobility"></span><i><b class="f"></b><b class="f"></b><b class="f"></b><b class="f"></b><b></b></i>
+            <span data-i18n="stat.ammo"></span><i><b class="f"></b><b class="f"></b><b class="f"></b><b class="f"></b><b class="f"></b></i>
+          </div>
+          <div class="wpn" data-i18n="hunter.weapon"></div>
+        </div>
+      </button>
+      <button class="hero" data-class="default">
+        <div class="spot"></div><div class="num">02</div><div class="badge" data-i18n="selected"></div>
+        <div class="floor"></div><img src="./ui/char_gunner.webp" alt="" draggable="false">
+        <div class="info">
+          <div class="role" data-i18n="survivor"></div>
+          <h3 data-i18n="swat.name"></h3>
+          <p class="desc" data-i18n="swat.desc"></p>
+          <div class="stats">
+            <span data-i18n="stat.power"></span><i><b class="f"></b><b class="f"></b><b class="f"></b><b class="f"></b><b class="f"></b></i>
+            <span data-i18n="stat.range"></span><i><b class="f"></b><b class="f"></b><b class="f"></b><b class="f"></b><b></b></i>
+            <span data-i18n="stat.mobility"></span><i><b class="f"></b><b class="f"></b><b class="f"></b><b></b><b></b></i>
+            <span data-i18n="stat.ammo"></span><i><b class="f"></b><b class="f"></b><b class="f"></b><b></b><b></b></i>
+          </div>
+          <div class="wpn" data-i18n="swat.weapon"></div>
+        </div>
+      </button>
+      <div class="hero infected">
+        <div class="spot"></div><div class="num" style="-webkit-text-stroke-color:#c8322c44">??</div>
+        <div class="floor"></div><img src="./ui/char_zombie.webp" alt="" draggable="false">
+        <div class="info">
+          <div class="role" data-i18n="notSelectable"></div>
+          <h3 data-i18n="infected"></h3>
+          <p class="desc" data-i18n="infectedDesc"></p>
+        </div>
+      </div>
+    </div>
+
+    <aside class="squad">
+      <div class="vhead"><span data-i18n="squad"></span><span id="squadCount"></span></div>
+      <ul id="roster"></ul>
+      <button class="cta primary" id="lStart" disabled><span data-i18n="startMatch"></span><small></small></button>
+      <button class="cta ghost" id="lPractice" data-i18n="practice"></button>
+      <div id="practiceBox"><div class="inner">
+        <div class="prow"><label data-i18n="playAs"></label>
+          <select id="pRole"><option value="survivor" data-i18n="asSurvivor"></option><option value="zombie" data-i18n="asZombie"></option></select></div>
+        <div class="prow"><label data-i18n="dummies"></label>
+          <select id="pCount"><option value="0"></option><option value="1" selected>1</option><option value="2">2</option><option value="4">4</option><option value="6">6</option></select></div>
+        <div class="prow"><label data-i18n="behavior"></label><select id="pBehavior"></select></div>
+        <button class="cta primary" id="pStart" data-i18n="practiceStart"></button>
+      </div></div>
+    </aside>
+    <div class="lfoot" data-i18n="keys"></div>
+    <div class="conn" data-i18n="connecting"></div>
+  </section>
+
+  <!-- 일시정지 (라운드 중 Esc) -->
+  <section id="scrPause">
+    <nav class="panel" id="pausePanel">
+      <div class="logo">FERAL</div>
+      <div class="vhead big" data-i18n="paused"></div>
+      <div class="view on" id="pauseList">
+        <button class="mi" id="pResume" data-i18n="resume"></button>
+        <button class="mi" id="pSettings" data-sfx="whoosh" data-i18n="settings"></button>
+        <button class="mi" id="pEnd" data-i18n="endPractice"></button>
+      </div>
+      <div class="view" id="pauseSettings" data-settings="1">
+        <div id="settingsSlotPause"></div>
+        <button class="mi small" data-back data-i18n="back"></button>
+      </div>
+    </nav>
+    <div class="lfoot" data-i18n="keys"></div>
+  </section>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

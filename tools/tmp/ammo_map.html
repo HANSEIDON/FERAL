@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>탄약상자 맵 확인</title>
+<style>html, body { margin: 0; height: 100%; background: #000; overflow: hidden; } canvas { display: block; }</style>
+</head>
+<body>
+<script type="module">
+// 임시 확인용 — 실제 맵(buildScene)과 탄약 지점(AMMO_SPOTS)에 게임과 같은 방식으로
+// 탄약상자를 놓고 플레이어 눈높이에서 본다. 짝수 지점 = 소총, 홀수 = 권총.
+// ?spot=번호  ?dist=카메라 거리(m)
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { initLoaders, loadModel } from '/src/core/assets.js';
+import { buildScene } from '/src/game/world.js';
+import { AMMO_SPOTS } from '/shared/map.js';
+import { WORLD } from '/shared/config.js';
+
+const params = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+buildScene(scene);
+initLoaders(renderer);
+const gltf = await loadModel('/models/ammo_props.glb');
+AMMO_SPOTS.forEach((s, i) => {
+  const g = new THREE.Group();
+  g.position.set(s.x, 0, s.z);
+  g.rotation.y = i * 2.4;   // main.js 와 같다
+  g.add(gltf.scene.getObjectByName(i % 2 ? 'AmmoPistol' : 'AmmoRifle').clone());
+  scene.add(g);
+});
+const spot = AMMO_SPOTS[+(params.get('spot') ?? 0)];
+const dist = +(params.get('dist') ?? 3);
+const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 200);
+camera.position.set(spot.x + dist * 0.7, WORLD.eyeHeight, spot.z + dist * 0.7);
+camera.lookAt(spot.x, 0.15, spot.z);
+renderer.setAnimationLoop(() => {
+  if (renderer.domElement.width !== Math.floor(innerWidth * devicePixelRatio)) {
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  }
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>캐릭터 사진</title>
+<style>html, body { margin: 0; background: #222; } canvas { display: block; max-width: 100vw; max-height: 100vh; }</style>
+</head>
+<body>
+<script type="module">
+// 임시 — 키아트(AI 이미지) 참고용 캐릭터 사진. 게임 모델 · 무기 그대로, 밝은 회색 스튜디오 배경.
+//   ?c=zombie|hunter|gunner  ?pose=idle|aim (생존자) 또는 클립이름 (좀비: idle attack rage taunt …)
+//   ?t=클립 시각(초)  ?yaw=도 (0 = 정면)  ?w=1024&h=1536  ?save=파일이름 → shot_server(5199)로 보낸다
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { initLoaders } from '/src/core/assets.js';
+import { preloadAvatars, makeAvatar, getModel } from '/src/game/remotePlayers.js';
+import { MV } from '/src/core/input.js';
+
+const q = new URLSearchParams(location.search);
+const W = +(q.get('w') ?? 1024), H = +(q.get('h') ?? 1536);
+const c = q.get('c') ?? 'hunter', pose = q.get('pose') ?? 'idle', t = +(q.get('t') ?? 0.5);
+const cut = q.get('bg') === 'none';   // 배경 없는 컷아웃 + 극적인 조명 (캐릭터 선택 화면용)
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: cut });
+renderer.setSize(W, H, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = cut ? null : new THREE.Color(0xb9bbbe);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.9;
+if (cut) {
+  // 나트륨 가로등 같은 주황 키 + 차가운 푸른 역광 — 맵의 밤 조명과 같은 색
+  scene.environmentIntensity = 0.25;
+  const key = new THREE.DirectionalLight(0xffb070, 3.2); key.position.set(-2.5, 3, 3); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x8fb4ff, 4.0); rim.position.set(3, 3, -3); scene.add(rim);
+  const rim2 = new THREE.DirectionalLight(0x8fb4ff, 2.0); rim2.position.set(-3, 2, -3); scene.add(rim2);
+  scene.add(new THREE.HemisphereLight(0x3a4560, 0x100c08, 0.5));
+} else {
+  const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(2, 4, 3); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xffffff, 1.2); rim.position.set(-3, 3, -3); scene.add(rim);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 0.6));
+}
+
+initLoaders(renderer);
+await preloadAvatars('/');
+let obj, height;
+if (c === 'zombie') {
+  const g = getModel('zombie');
+  obj = SkeletonUtils.clone(g.scene);
+  const mixer = new THREE.AnimationMixer(obj);
+  const clip = g.animations.find((a) => a.name === pose) ?? g.animations.find((a) => a.name === 'idle');
+  mixer.clipAction(clip).play();
+  mixer.update(Math.min(t, clip.duration - 0.01));
+  height = 2.15;
+} else {
+  obj = makeAvatar('survivor', c);
+  const anim = obj.userData.anim;
+  const mv = pose === 'aim' ? MV.FIRE : 0;
+  for (let i = 0; i < Math.round(t * 60); i++) anim.update(1 / 60, mv, 'alive', 0);
+  height = 1.75;
+}
+obj.rotation.y = (+(q.get('yaw') ?? 0) * Math.PI) / 180;
+scene.add(obj);
+
+const fov = 28;
+const camera = new THREE.PerspectiveCamera(fov, W / H, 0.05, 100);
+const fit = (height * 1.18) / 2 / Math.tan((fov * Math.PI) / 360);
+camera.position.set(0, height * 0.55, fit);
+camera.lookAt(0, height * 0.5, 0);
+renderer.render(scene, camera);
+renderer.render(scene, camera);
+if (q.get('save')) {
+  const blob = await new Promise((r) => renderer.domElement.toBlob(r, 'image/png'));
+  // text/plain 은 단순 요청이라 CORS 사전 확인을 건너뛴다
+  await fetch(`http://127.0.0.1:5199/save?name=${q.get('save')}`, { method: 'POST', body: new Blob([blob], { type: 'text/plain' }) });
+  document.title = 'saved';
+}
+</script>
+</body>
+</html>

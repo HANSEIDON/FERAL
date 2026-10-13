@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<!-- 게임과 같은 상대 경로(./models, ./textures)가 루트를 가리키게 -->
+<base href="/">
+<title>맵 확인</title>
+<style>html, body { margin: 0; height: 100%; background: #000; overflow: hidden; } canvas { display: block; }
+#info { position: fixed; left: 8px; top: 8px; color: #fff; font: 12px monospace; background: rgba(0,0,0,.6); padding: 6px; white-space: pre; }</style>
+</head>
+<body>
+<div id="info"></div>
+<script type="module">
+// 임시 확인용 — 게임과 같은 buildScene + dressMap(모델 · 밤하늘)으로 맵을 그린다 (서버 접속 없음).
+//   기본: 위에서 내려다보기 · 초록 = 생존자 스폰, 빨강 = 좀비 스폰, 노랑 = 탄약 지점
+//   ?eye=x,z,yaw(도)[,발높이]   그 자리 눈높이(1.62m)에서 본다
+//   ?high=x,z,yaw,y    높은 데서 비스듬히 본다 (y = 카메라 높이)
+//   ?tp=x,z,yaw        3인칭 카메라 자리 (눈 뒤 3.2m · 위 1.05m)
+//   ?boxes=1           모델 없이 박스만   ?marks=0  표시 끄기   ?noui=1
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { buildScene } from '/src/game/world.js';
+import { dressMap } from '/src/game/mapArt.js';
+import { initLoaders } from '/src/core/assets.js';
+import { SURVIVOR_SPAWNS, ZOMBIE_SPAWN, AMMO_SPOTS } from '/shared/map.js';
+import { WORLD } from '/shared/config.js';
+
+const params = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.35;   // main.js 와 같다
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+const { boxes, group } = buildScene(scene);
+initLoaders(renderer);
+let stats = null;
+if (!params.get('boxes')) stats = await dressMap({ scene, renderer, boxes, group });
+
+if (params.get('marks') !== '0') {
+  const marker = (p, color, r = 0.6) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.3, 20), new THREE.MeshBasicMaterial({ color }));
+    m.position.set(p.x, 0.15, p.z);
+    scene.add(m);
+  };
+  SURVIVOR_SPAWNS.forEach((p) => marker(p, 0x33ff66));
+  marker(ZOMBIE_SPAWN, 0xff3333, 0.9);
+  AMMO_SPOTS.forEach((p) => marker(p, 0xffdd33, 0.45));
+}
+
+let camera;
+const eye = params.get('eye')?.split(',').map(Number);
+const high = params.get('high')?.split(',').map(Number);
+const tp = params.get('tp')?.split(',').map(Number);
+if (tp) {
+  const [x, z, yawDeg] = tp, yaw = (yawDeg * Math.PI) / 180;
+  camera = new THREE.PerspectiveCamera(78, 1, 0.05, 200);   // 게임 화각
+  const e = new THREE.Vector3(x, WORLD.eyeHeight, z);
+  camera.position.set(x + Math.sin(yaw) * 3.2 + Math.cos(yaw) * 0.55, WORLD.eyeHeight + 1.05, z + Math.cos(yaw) * 3.2 - Math.sin(yaw) * 0.55);
+  camera.lookAt(e.x - Math.sin(yaw) * 20, WORLD.eyeHeight, e.z - Math.cos(yaw) * 20);
+} else if (eye || high) {
+  const [x, z, yawDeg, y = 0] = eye ?? high;
+  camera = new THREE.PerspectiveCamera(eye ? 75 : 60, 1, 0.05, 300);
+  const yaw = (yawDeg * Math.PI) / 180;
+  camera.position.set(x, eye ? y + WORLD.eyeHeight : y, z);
+  const d = eye ? 10 : y * 1.2;
+  camera.lookAt(x - Math.sin(yaw) * d, eye ? y + WORLD.eyeHeight : 0, z - Math.cos(yaw) * d);
+} else {
+  scene.fog = null;
+  const hx = WORLD.arenaX / 2 + 2, hz = WORLD.arenaZ / 2 + 2;
+  camera = new THREE.OrthographicCamera(-hx, hx, hz, -hz, 0.1, 200);
+  camera.position.set(0, 100, 0);
+  camera.up.set(0, 0, -1);      // 화면 위쪽 = -z (북쪽)
+  camera.lookAt(0, 0, 0);
+}
+window.__view = { renderer, scene, get camera() { return camera; } };   // 성능 재기용
+
+// ?chars=1 — 카메라 앞 5 · 10 · 18m 에 좀비 · 총수 · 사냥꾼 (idle 첫 자세). 밤에 사람이 보이는지
+const mixers = [];
+if (params.get('chars') && camera.isPerspectiveCamera) {
+  const { loadModel } = await import('/src/core/assets.js');
+  const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+  const side = new THREE.Vector3(-fwd.z, 0, fwd.x);
+  const list = [['zombie', 5, -1.2], ['gunner', 10, 1.5], ['hunter', 18, -2]];
+  for (const [name, d, s] of list) {
+    const g = await loadModel(`/models/${name}.glb`);
+    const o = g.scene;
+    o.position.copy(camera.position).addScaledVector(fwd, d).addScaledVector(side, s).setY(0);
+    o.lookAt(camera.position.x, 0, camera.position.z);
+    scene.add(o);
+    const clip = g.animations.find((a) => /idle/i.test(a.name)) ?? g.animations[0];
+    if (clip) { const m = new THREE.AnimationMixer(o); m.clipAction(clip).play(); m.update(0.3); mixers.push(m); }
+  }
+}
+const info = document.getElementById('info');
+if (params.get('noui')) info.remove();
+
+renderer.setAnimationLoop(() => {
+  if (renderer.domElement.width !== Math.floor(innerWidth * renderer.getPixelRatio())) {
+    renderer.setSize(innerWidth, innerHeight);
+    if (camera.isPerspectiveCamera) camera.aspect = innerWidth / innerHeight;
+    else {
+      const hx = WORLD.arenaX / 2 + 2, hz = WORLD.arenaZ / 2 + 2;
+      const a = innerWidth / innerHeight;
+      if (a > hx / hz) { camera.left = -hz * a; camera.right = hz * a; camera.top = hz; camera.bottom = -hz; }
+      else { camera.left = -hx; camera.right = hx; camera.top = hx / a; camera.bottom = -hx / a; }
+    }
+    camera.updateProjectionMatrix();
+  }
+  renderer.render(scene, camera);
+  if (info.isConnected) {
+    const r = renderer.info.render;
+    info.textContent = `draw ${r.calls} · tris ${(r.triangles / 1000).toFixed(0)}k · tex ${renderer.info.memory.textures} · geo ${renderer.info.memory.geometries}` +
+      (stats ? `\n맵 모델: 드로우 ${stats.drawCalls} · 삼각형 ${(stats.tris / 1000).toFixed(0)}k · 종류 ${stats.models}` : '');
+  }
+});
+</script>
+</body>
+</html>

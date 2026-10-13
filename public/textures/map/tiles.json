@@ -1,0 +1,30 @@
+{
+ "asphalt": {
+  "m": 3,
+  "metal": false
+ },
+ "hangar": {
+  "m": 2,
+  "metal": false
+ },
+ "concrete_wall": {
+  "m": 2,
+  "metal": false
+ },
+ "corrugated": {
+  "m": 2.7,
+  "metal": true
+ },
+ "dock": {
+  "m": 5,
+  "metal": false
+ },
+ "rust": {
+  "m": 2.2,
+  "metal": false
+ },
+ "metal_plate": {
+  "m": 0.5,
+  "metal": true
+ }
+}

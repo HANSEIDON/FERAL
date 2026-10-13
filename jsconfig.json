@@ -1,0 +1,18 @@
+{
+  // VS Code 가 import 를 따라가고 자동완성을 해주기 위한 설정이다.
+  // 빌드에는 쓰이지 않는다 (Vite 가 따로 번들한다).
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "checkJs": false,
+    "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "three": ["./node_modules/three/src/Three.js"],
+      "three/addons/*": ["./node_modules/three/examples/jsm/*"]
+    }
+  },
+  "include": ["src/**/*.js", "shared/**/*.js", "server/**/*.js", "vite.config.js"],
+  "exclude": ["node_modules", "dist", "assets"]
+}

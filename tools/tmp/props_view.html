@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>소품 확인</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #202329; color: #ddd; font: 13px sans-serif; overflow: hidden; }
+  #ui { position: fixed; left: 10px; top: 10px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; }
+  button { background: #2f3542; color: #ddd; border: 1px solid #555; border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+  button.on { border-color: #4d8dff; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="ui"></div>
+<script type="module">
+// 임시 확인용 — 사냥꾼(활) · 총수(소총 · 권총)를 동작별로 본다. 게임과 같은 코드 경로를 쓴다.
+// ?m=hunter|gunner  ?s=동작  — 총수는 '권총' 버튼으로 무기를 바꾼다
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { initLoaders } from '/src/core/assets.js';
+import { preloadAvatars, makeAvatar } from '/src/game/remotePlayers.js';
+import { MV } from '/src/core/input.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202329);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x333333, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 2); sun.position.set(3, 5, 4); scene.add(sun);
+scene.add(new THREE.GridHelper(10, 10, 0x555555, 0x333333));
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.05, 100);
+const params = new URLSearchParams(location.search);
+const cam = (params.get('cam') ?? '2.2,1.6,-2.2').split(',').map(Number);
+camera.position.set(...cam);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(...(params.get('target') ?? '0,1.1,0').split(',').map(Number));
+controls.update();
+
+initLoaders(renderer);
+await preloadAvatars('/');
+const model = params.get('m') ?? 'hunter';
+const avatar = makeAvatar('survivor', model);
+scene.add(avatar);
+const anim = avatar.userData.anim;
+window.anim = anim;
+
+const STATES = {
+  idle: [0, 0], aim: [MV.FIRE, 0], aim_fwd: [MV.FIRE | MV.FWD, model === 'gunner' ? 4.5 : 1.6], aim_left: [MV.FIRE | MV.LEFT, 1.6],
+  run: [MV.FWD, 4.5], jump: [MV.AIR, 0], downed: [0, 0],
+};
+let state = params.get('s') ?? 'idle';
+let alt = params.get('alt') ? MV.ALT : 0;
+const stopAt = params.get('at') ? +params.get('at') : Infinity;   // 이 시각(초)에서 동작을 멈춘다 (캡처용)
+let elapsed = 0;
+const ui = document.getElementById('ui');
+for (const k of Object.keys(STATES)) {
+  const b = document.createElement('button');
+  b.textContent = k; b.onclick = () => { state = k; [...ui.children].forEach((c) => c.classList.toggle('on', c === b)); };
+  if (k === state) b.classList.add('on');
+  ui.appendChild(b);
+}
+if (model === 'gunner') {
+  const b = document.createElement('button');
+  b.textContent = '권총'; b.onclick = () => { alt = alt ? 0 : MV.ALT; b.classList.toggle('on', !!alt); };
+  ui.appendChild(b);
+}
+// ?at= 이 있으면 그 시간만큼 미리 계산해 두고 멈춘다 — 숨은 탭은 프레임이 거의 안 돌아서
+// 실시간으로 기다리면 원하는 자세까지 가지 않는다
+if (Number.isFinite(stopAt)) {
+  const [mv0, sp0] = STATES[state];
+  for (let t = 0; t < stopAt; t += 1 / 60) anim.update(1 / 60, mv0 | alt, state === 'downed' ? 'downed' : 'alive', sp0);
+  elapsed = stopAt;
+}
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  let dt = Math.min(0.05, clock.getDelta());
+  if (elapsed >= stopAt) dt = 0;
+  elapsed += dt;
+  if (params.get('noui')) ui.style.display = 'none';
+  const [mv, sp] = STATES[state];
+  anim.update(dt, mv | alt, state === 'downed' ? 'downed' : 'alive', sp);
+  // 창 크기 따라가기 — 숨은 창에서 열리면 처음 크기가 0 이다
+  if (renderer.domElement.width !== Math.floor(innerWidth * devicePixelRatio)) {
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  }
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>모델 검수기 — zombie-fps</title>
+<style>
+  :root {
+    --bg: #15171c;  --panel: #1c1f27;  --line: #2c3240;
+    --fg: #e6e9ef;  --muted: #8d96a8;  --accent: #3d7dff;
+    --good: #4ec77f; --warn: #e8b23a; --bad: #ef5f5f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: grid; grid-template-columns: 1fr 380px;
+    font: 13px/1.6 ui-sans-serif, "Malgun Gothic", system-ui, sans-serif;
+    background: var(--bg); color: var(--fg); overflow: hidden;
+  }
+  body.dragging::after {
+    content: "여기에 놓으세요";
+    position: fixed; inset: 12px; z-index: 50;
+    display: grid; place-items: center;
+    border: 2px dashed var(--accent); border-radius: 12px;
+    background: rgba(61,125,255,.09); font-size: 20px; pointer-events: none;
+  }
+
+  #view { width: 100%; height: 100%; display: block; }
+
+  aside {
+    background: var(--panel); border-left: 1px solid var(--line);
+    overflow-y: auto; padding: 16px;
+  }
+  h1 { font-size: 14px; margin: 0 0 2px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  select, button, label.btn {
+    background: #262b36; color: var(--fg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 9px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  select:disabled { opacity: .45; cursor: default; }
+  label.check { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); cursor: pointer; }
+  input[type=file] { display: none; }
+
+  #empty { color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; padding: 22px 16px; text-align: center; }
+  #empty b { color: var(--fg); display: block; margin-bottom: 4px; }
+
+  #filename { font-size: 12px; color: var(--accent); word-break: break-all; margin-bottom: 10px; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+  th, td { text-align: left; padding: 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 400; width: 92px; }
+  td.warn { color: var(--warn); }
+
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .6px;
+       color: var(--muted); margin: 16px 0 7px; font-weight: 500; }
+
+  .chip { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 99px; margin: 0 4px 4px 0; }
+  .chip.on  { background: rgba(78,199,127,.16); color: var(--good); }
+  .chip.off { background: #22262f; color: #5c6474; }
+
+  ul { list-style: none; margin: 0; padding: 0; }
+  #issues li { padding: 7px 10px; border-radius: 6px; margin-bottom: 6px; border-left: 3px solid; font-size: 12px; }
+  #issues li.good { border-color: var(--good); background: rgba(78,199,127,.08); }
+  #issues li.info { border-color: #5b86d6; background: rgba(91,134,214,.08); }
+  #issues li.warn { border-color: var(--warn); background: rgba(232,178,58,.08); }
+  #issues li.bad  { border-color: var(--bad);  background: rgba(239,95,95,.08); }
+
+  #texlist li { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #texlist em { color: var(--good); font-style: normal; }
+  .muted { color: var(--muted); }
+
+  #status {
+    position: fixed; left: 16px; bottom: 16px; z-index: 40; display: none;
+    background: rgba(0,0,0,.72); padding: 7px 13px; border-radius: 6px; font-size: 12px;
+  }
+  @media (max-width: 860px) { body { grid-template-columns: 1fr; grid-template-rows: 55% 45%; } }
+</style>
+</head>
+<body>
+
+<canvas id="view"></canvas>
+
+<aside>
+  <h1>모델 검수기</h1>
+  <div class="sub">GLB 파일을 이 창에 끌어다 놓으세요.</div>
+
+  <div class="controls">
+    <label class="btn">파일 열기<input type="file" id="picker" accept=".glb,.gltf"></label>
+    <select id="kind" title="예산 기준">
+      <option value="character">캐릭터 예산</option>
+      <option value="prop">소품 예산</option>
+    </select>
+    <select id="clips" disabled><option>애니메이션 없음</option></select>
+    <label class="check"><input type="checkbox" id="play" checked> 재생</label>
+    <label class="check"><input type="checkbox" id="wire"> 와이어프레임</label>
+    <label class="check"><input type="checkbox" id="refToggle" checked> 기준자</label>
+  </div>
+
+  <div id="empty">
+    <b>아직 모델이 없습니다</b>
+    ComfyUI <code>SaveGLB</code> 로 뽑은 파일을<br>여기로 드래그하면 바로 검사합니다.
+  </div>
+
+  <div id="report" style="display:none">
+    <div id="filename"></div>
+    <table><tbody id="stats"></tbody></table>
+
+    <h2>PBR 맵</h2>
+    <div id="maps"></div>
+
+    <h2>판정</h2>
+    <ul id="issues"></ul>
+
+    <h2>텍스처</h2>
+    <ul id="texlist"></ul>
+  </div>
+</aside>
+
+<div id="status"></div>
+<script type="module" src="/src/inspect.js"></script>
+</body>
+</html>

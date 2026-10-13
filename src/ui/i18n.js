@@ -1,0 +1,259 @@
+// 화면 글자 — 한국어 · 영어. 메뉴 · 대기실 · 일시정지 화면은 전부 여기를 거친다.
+//
+// HTML 은 data-i18n="키" (글자) · data-i18n-ph="키" (입력칸 안내문) 를 달아 두면
+// applyI18n() 이 바꿔 끼운다. JS 에서는 t('키') 로 꺼낸다.
+// 게임 제목(FERAL)은 두 언어 모두 영어 그대로다.
+
+const DICT = {
+  en: {
+    pressAny: 'PRESS ANY KEY',
+    callsign: 'NAME',
+    namePh: 'Your name',
+    play: 'PLAY',
+    settings: 'SETTINGS',
+    language: 'LANGUAGE',
+    back: 'BACK',
+    sens: 'Mouse sensitivity',
+    invertY: 'Invert Y axis',
+    volMaster: 'Master volume',
+    volSfx: 'Sound effects',
+    volMusic: 'Music',
+    settingsNote: 'You can also change these in game with Esc.',
+    connecting: 'Connecting…',
+    online: 'Online',
+    offline: 'Disconnected · reconnecting…',
+    lobby: 'LOBBY',
+    chooseSurvivor: 'SELECT CHARACTER',
+    selected: 'SELECTED',
+    survivor: 'SURVIVOR',
+    squad: 'PLAYERS',
+    you: 'YOU',
+    startMatch: 'START MATCH',
+    needPlayers: 'Needs 2 or more players',
+    practice: 'PRACTICE',
+    practiceStart: 'START PRACTICE',
+    playAs: 'Role',
+    asSurvivor: 'Survivor',
+    asZombie: 'Zombie',
+    dummies: 'Bots',
+    dummyNone: 'None',
+    behavior: 'Bot behavior',
+    'bh.hunt': 'Aggressive',
+    'bh.still': 'Idle',
+    'bh.chase': 'Chase',
+    'bh.flee': 'Flee',
+    infected: 'ZOMBIE',
+    notSelectable: 'NOT SELECTABLE',
+    infectedDesc: 'Not selectable. One player becomes the zombie at random when the match starts.',
+    'hunter.name': 'HUNTER',
+    'hunter.desc': 'Uses a bow. Unlimited arrows, high damage per shot.',
+    'hunter.weapon': 'Bow · unlimited arrows',
+    'swat.name': 'SWAT',
+    'swat.desc': 'Rifle and pistol. High rate of fire.',
+    'swat.weapon': 'M4 rifle · M1911 pistol',
+    'stat.power': 'Damage',
+    'stat.range': 'Range',
+    'stat.mobility': 'Mobility',
+    'stat.ammo': 'Ammo',
+    paused: 'PAUSED',
+    resume: 'RESUME',
+    endPractice: 'END PRACTICE',
+    toMenu: 'MAIN MENU',
+    keys: 'WASD move · Space jump · Shift sprint · Click attack · R reload / rage · F revive · Esc menu',
+    practiceTag: 'PRACTICE · Esc for menu',
+    // ── 인게임 HUD ──
+    'role.zombie': 'ZOMBIE',
+    'class.default': 'SWAT',
+    'class.archer': 'HUNTER',
+    'w.fist': 'FISTS',
+    'w.pistol': 'M1911 PISTOL',
+    'w.rifle': 'M4 RIFLE',
+    'w.smg': 'SMG',
+    'w.bow': 'BOW',
+    hp: 'HP',
+    stamina: 'STAMINA',
+    bleeding: 'BLEEDING OUT',
+    crawlHint: 'WASD to crawl · a teammate can revive you (hold F)',
+    down: 'DOWN',
+    reloading: 'RELOADING',
+    chargeJump: 'SUPER JUMP',
+    chargeBow: 'DRAW',
+    reviving: 'REVIVING…',
+    holdHint: 'The zombie is restrained — spread out',
+    rage: 'RAGE',
+    ready: 'READY',
+    active: 'ACTIVE',
+    'tz.youZombie': 'You are the zombie. Catch them all.',
+    'tz.youSurvivor': 'You are a survivor. Stay alive.',
+    'tz.youDown': 'You are down. Crawl to a teammate.',
+    'tz.mateDown': 'A teammate is down.',
+    'tz.youUp': 'You are back up.',
+    'tz.mateUp': 'A teammate is back up.',
+    'tz.youDead': 'You died. Wait for the next round.',
+    'tz.slamHit': 'Slam hit −{n}',
+    'tz.dodged': 'Dodged!',
+    'tz.slamCount': 'Slammed {n}',
+    'tz.rageMe': 'RAGE! You are faster.',
+    'tz.rageZombie': 'The zombie is raging.',
+    'tz.reload': 'Reloading…',
+    'tz.ammo': '{w} ammo +{n}',
+    'tz.noAmmo': 'No weapon for this ammo',
+    'hint.closer': 'Get closer',
+    'hint.revive': 'Hold F to revive',
+    'win.zombie': 'ZOMBIE WINS',
+    'win.survivor': 'SURVIVORS WIN',
+    'r.practiceEnd': 'Practice time is up',
+    'r.allDown': 'Every survivor is down',
+    'r.zombieDead': 'The zombie was killed',
+    'r.timeUp': 'Survived until time ran out',
+    'r.zombieLeft': 'The zombie left',
+    'r.notEnough': 'Not enough players',
+  },
+  ko: {
+    pressAny: '아무 키나 눌러 시작',
+    callsign: '닉네임',
+    namePh: '닉네임 입력',
+    play: '게임 시작',
+    settings: '설정',
+    language: '언어',
+    back: '뒤로',
+    sens: '마우스 감도',
+    invertY: 'Y축 반전',
+    volMaster: '전체 소리',
+    volSfx: '효과음',
+    volMusic: '배경 음악',
+    settingsNote: '게임 중에도 Esc로 바꿀 수 있습니다.',
+    connecting: '연결 중…',
+    online: '연결됨',
+    offline: '연결 끊김 · 재연결 중…',
+    lobby: '대기실',
+    chooseSurvivor: '캐릭터 선택',
+    selected: '선택됨',
+    survivor: '생존자',
+    squad: '참가자 목록',
+    you: '나',
+    startMatch: '게임 시작',
+    needPlayers: '2명 이상 필요',
+    practice: '연습',
+    practiceStart: '연습 시작',
+    playAs: '역할',
+    asSurvivor: '생존자',
+    asZombie: '좀비',
+    dummies: '봇 수',
+    dummyNone: '없음',
+    behavior: '봇 행동',
+    'bh.hunt': '공격',
+    'bh.still': '대기',
+    'bh.chase': '추격',
+    'bh.flee': '도망',
+    infected: '좀비',
+    notSelectable: '선택 불가',
+    infectedDesc: '선택할 수 없습니다. 게임이 시작되면 참가자 중 한 명이 무작위로 좀비가 됩니다.',
+    'hunter.name': '사냥꾼',
+    'hunter.desc': '활을 씁니다. 화살이 무한이고 한 발 피해가 큽니다.',
+    'hunter.weapon': '활 · 화살 무한',
+    'swat.name': 'SWAT',
+    'swat.desc': '소총과 권총을 씁니다. 연사가 빠릅니다.',
+    'swat.weapon': 'M4 소총 · M1911 권총',
+    'stat.power': '공격력',
+    'stat.range': '사거리',
+    'stat.mobility': '기동성',
+    'stat.ammo': '탄약',
+    paused: '일시정지',
+    resume: '계속하기',
+    endPractice: '연습 종료',
+    toMenu: '메인 메뉴',
+    keys: 'WASD 이동 · Space 점프 · Shift 달리기 · 클릭 공격 · R 재장전/광폭화 · F 부활 · Esc 메뉴',
+    practiceTag: '연습 모드 · Esc: 메뉴',
+    // ── 인게임 HUD ──
+    'role.zombie': '좀비',
+    'class.default': 'SWAT',
+    'class.archer': '사냥꾼',
+    'w.fist': '주먹',
+    'w.pistol': 'M1911 권총',
+    'w.rifle': 'M4 소총',
+    'w.smg': '기관단총',
+    'w.bow': '활',
+    hp: '체력',
+    stamina: '스태미나',
+    bleeding: '출혈 중',
+    crawlHint: 'WASD로 기어가기 · 동료가 F를 누르고 있으면 일어납니다',
+    down: '쓰러짐',
+    reloading: '재장전 중',
+    chargeJump: '슈퍼점프',
+    chargeBow: '활 당기기',
+    reviving: '일으키는 중…',
+    holdHint: '좀비가 묶여 있습니다 — 흩어지세요',
+    rage: '광폭화',
+    ready: '준비',
+    active: '발동 중',
+    'tz.youZombie': '좀비가 되었습니다. 전부 잡으세요.',
+    'tz.youSurvivor': '생존자입니다. 끝까지 살아남으세요.',
+    'tz.youDown': '쓰러졌습니다. 동료에게 기어가세요.',
+    'tz.mateDown': '동료가 쓰러졌습니다.',
+    'tz.youUp': '일어났습니다.',
+    'tz.mateUp': '동료가 일어났습니다.',
+    'tz.youDead': '사망했습니다. 다음 라운드를 기다리세요.',
+    'tz.slamHit': '착지 충격 −{n}',
+    'tz.dodged': '회피 성공',
+    'tz.slamCount': '{n}명 강타',
+    'tz.rageMe': '광폭화 — 더 빨라집니다.',
+    'tz.rageZombie': '좀비가 광폭화했습니다.',
+    'tz.reload': '재장전…',
+    'tz.ammo': '{w} 탄약 +{n}',
+    'tz.noAmmo': '맞는 무기가 없습니다',
+    'hint.closer': '조금 더 다가가세요',
+    'hint.revive': 'F를 누르고 있으면 일으킵니다',
+    'win.zombie': '좀비 승리',
+    'win.survivor': '생존자 승리',
+    'r.practiceEnd': '연습 시간 종료',
+    'r.allDown': '생존자 전멸',
+    'r.zombieDead': '좀비 처치',
+    'r.timeUp': '시간 종료까지 생존',
+    'r.zombieLeft': '좀비가 나갔습니다',
+    'r.notEnough': '인원 부족',
+  },
+};
+
+export const LANGS = [{ id: 'en', label: 'ENGLISH' }, { id: 'ko', label: '한국어' }];
+
+let lang = (() => {
+  try {
+    const saved = localStorage.getItem('zfps.lang');
+    if (saved && DICT[saved]) return saved;
+  } catch { /* 저장소를 못 쓰면 브라우저 언어로 */ }
+  return navigator.language?.startsWith('ko') ? 'ko' : 'en';
+})();
+const listeners = new Set();
+
+export function getLang() { return lang; }
+
+/** 글자 꺼내기. vars 를 주면 {이름} 자리에 끼워 넣는다 — t('tz.ammo', { w: '소총', n: 30 }) */
+export function t(key, vars) {
+  const s = DICT[lang][key] ?? DICT.en[key] ?? key;
+  return vars ? s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '') : s;
+}
+
+// 서버가 보내는 라운드 종료 사유(한국어) → 글자 키
+const REASONS = {
+  '연습 시간 종료': 'r.practiceEnd', '생존자 전멸': 'r.allDown', '좀비 처치': 'r.zombieDead',
+  '시간 초과': 'r.timeUp', '좀비가 나감': 'r.zombieLeft', '인원 부족': 'r.notEnough',
+};
+export function reasonText(reason) { return REASONS[reason] ? t(REASONS[reason]) : reason; }
+
+export function setLang(next) {
+  if (!DICT[next] || next === lang) return;
+  lang = next;
+  try { localStorage.setItem('zfps.lang', lang); } catch { /* 무시 */ }
+  applyI18n();
+  for (const f of listeners) f(lang);
+}
+
+export function onLangChange(f) { listeners.add(f); }
+
+/** data-i18n · data-i18n-ph 가 달린 요소를 지금 언어로 바꾼다. */
+export function applyI18n(root = document) {
+  document.documentElement.lang = lang;
+  for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of root.querySelectorAll('[data-i18n-ph]')) el.placeholder = t(el.dataset.i18nPh);
+}

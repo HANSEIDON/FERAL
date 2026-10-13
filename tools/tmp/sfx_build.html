@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>효과음 만들기</title></head>
+<body style="background:#222;color:#ddd;font:13px monospace">
+<pre id="log"></pre>
+<script type="module">
+// 받은 효과음(tools/tmp/sfx_src — 원본은 다운로드 폴더)을 잘라 게임용 파일로 만든다.
+// 브라우저 디코더로 mp3 · ogg · wav 를 다 풀어, 구간을 자르고 · 모노로 · 최대 음량을 맞춰
+// 16비트 WAV 로 public/sfx 에 저장한다 (shot_server.cjs ?out=sfx 가 받는다).
+//   [이름, 원본, 시작초, 끝초, 끝 페이드초]
+const SPEC = [
+  ['m4_shot', 'm4_fire.wav', 0.955, 1.26, 0.12],          // 연사 녹음에서 한 발 (0.97초)
+  ['pistol_shot', 'pistol_fire.wav', 0, 1.0, 0.35],
+  ['dry_fire', 'dry_fire.wav', 0.04, 0.3, 0.05],
+  ['m4_reload', 'm4_reload.mp3', 0.2, 2.65, 0.1],         // 탄창 빼기 0.1초 · 끼우고 장전 2.25초
+  ['pistol_reload', 'pistol_reload.mp3', 0.4, 2.1, 0.1],  // 마지막 철컥 1.55초
+  ['jump_swat', 'surv_jump1.wav', 0.07, 0.3, 0.05],
+  ['jump_hunter', 'surv_jump2.wav', 0.05, 0.31, 0.05],
+  ['land', 'surv_land.wav', 0, 0.22, 0.06],
+  ['zombie_hurt', 'zombie_hurt.ogg', 0, 0.63, 0.1],
+  ['slam_jump', 'zombie_slam.wav', 0.34, 0.64, 0.04],     // 슈퍼점프 도약 (올라가는 바람)
+  ['slam_hit', 'zombie_slam.wav', 0.64, 2.3, 0.6],        // 착지 충격 (0.86초에 가장 크다)
+  ['zombie_win', 'zombie_win.wav', 0, 1.72, 0.2],
+  ['zombie_spawn', 'zombie_spawn.wav', 0, 5.6, 1.0],      // 시작 묶임 5초
+  ['arrow_fly', 'arrow_fly.wav', 0.07, 0.45, 0.08],
+  ['bow_draw', 'bow_draw_shoot.wav', 0.4, 1.44, 0.04],    // 시위 당기기 (1초)
+  ['bow_release', 'bow_draw_shoot.wav', 1.46, 1.9, 0.08], // 놓기 + 날아감
+  // ── 두 번째로 받은 것 ──
+  ['z_swing', 'z_swing.wav', 0.18, 0.95, 0.15],           // 좀비 주먹 휘두르는 바람 (0.48초에 가장 크다)
+  ['z_hit', 'z_punch_hit.wav', 0.06, 0.5, 0.15],          // 주먹이 몸에 닿는 소리
+  ['s_hurt1', 's_hurt1.wav', 0.1, 0.5, 0.1],              // 생존자 맞을 때 신음 넷
+  ['s_hurt2', 's_hurt2.wav', 0, 0.18, 0.05],
+  ['s_hurt3', 's_hurt3.wav', 0.02, 0.3, 0.08],
+  ['s_hurt4', 's_hurt4.wav', 0.16, 0.45, 0.08],
+  ['s_down', 's_dying.wav', 0.3, 4.8, 1.2],               // 쓰러질 때 (앞 4.5초)
+  ['s_death1', 's_death1.mp3', 0.06, 0.9, 0.2],
+  ['s_death2', 's_death2.wav', 0.22, 1.4, 0.3],
+  ['s_win', 's_win2.mp3', 0, 3.61, 0.3],                 // 생존자 승리
+  ['s_win_voice', 's_win1.wav', 0, 1.37, 0.2],
+  ['rage', 'rage.wav', 0.34, 1.7, 0.3],                   // 광폭화 포효
+  ['pickup', 'pickup.wav', 0, 0.5, 0.1],                  // 같은 소리 셋 중 첫 번째
+  ['rain', 'rain.wav', 0, 32.88, 0, true],                // 라운드 중 깔리는 비 · 천둥 (반복, 22kHz 로 줄임)
+  ['ui_whoosh', 'ui_whoosh.wav', 0, 0.66, 0.2],           // 화면이 바뀌는 클릭
+  ['ui_click', 'ui_click.mp3', 0, 0.3, 0.08],             // 그냥 클릭
+  ['ui_hover', 'ui_hover.wav', 0.02, 0.12, 0.02],         // 버튼 위에 올렸을 때
+  // 라운드 시작 — 생존자 화면에서 좀비 탄생 소리 대신 (직업별)
+  ['s_spawn_hunter', 's_spawn_hunter.mp3', 0, 11.64, 1.5],
+  ['s_spawn_swat', 's_spawn_swat.mp3', 54.0, 65.64, 2.5],   // 116초짜리 곡에서 첫 큰 타격(57.5초)을 중심으로 사냥꾼 곡 길이만큼
+];
+// ?only=a,b — 그것만 다시 만든다
+const ONLY = new URLSearchParams(location.search).get('only')?.split(',');
+// 발소리 — 긴 녹음에서 소리가 큰 순서로 n 개를 골라 [-0.03, +len] 씩 자른다
+const STEPS = [
+  ['step_s', 'surv_step.wav', 4, 0.24],
+  ['step_z', 'zombie_step.wav', 3, 0.55],
+];
+
+const log = (s) => { document.getElementById('log').textContent += s + '\n'; };
+const ctx = new OfflineAudioContext(1, 1, 44100);
+const cache = {};
+const load = async (n) => (cache[n] ??= await ctx.decodeAudioData(await (await fetch(`/tools/tmp/sfx_src/${n}`)).arrayBuffer()));
+
+function mono(a) {
+  const out = new Float32Array(a.length);
+  for (let c = 0; c < a.numberOfChannels; c++) { const d = a.getChannelData(c); for (let i = 0; i < d.length; i++) out[i] += d[i] / a.numberOfChannels; }
+  return out;
+}
+function cut(a, from, to, fade) {
+  const sr = a.sampleRate, d = mono(a);
+  const s = Math.max(0, Math.round(from * sr)), e = Math.min(d.length, Math.round(to * sr));
+  const out = d.slice(s, e);
+  const fi = Math.min(out.length, Math.round(0.003 * sr)), fo = Math.min(out.length, Math.round(fade * sr));
+  for (let i = 0; i < fi; i++) out[i] *= i / fi;                       // 딸깍 방지
+  for (let i = 0; i < fo; i++) out[out.length - 1 - i] *= i / fo;
+  let peak = 0; for (const v of out) peak = Math.max(peak, Math.abs(v));
+  if (peak > 0) for (let i = 0; i < out.length; i++) out[i] *= 0.9 / peak;   // 최대 음량 맞추기
+  return out;
+}
+function wav(samples, sr) {
+  const b = new ArrayBuffer(44 + samples.length * 2), v = new DataView(b);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true);
+  v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 32767, true);
+  return new Blob([b], { type: 'text/plain' });   // text/plain — 단순 요청이라 CORS 사전 확인을 건너뛴다
+}
+const save = async (name, blob) => {
+  await fetch(`http://127.0.0.1:5199/save?out=sfx&name=${name}`, { method: 'POST', body: blob });
+  log(`${name} ${(blob.size / 1024).toFixed(0)}KB`);
+};
+
+for (const [name, src, from, to, fade, half] of SPEC) {
+  if (ONLY && !ONLY.includes(name)) continue;
+  const a = await load(src);
+  let d = cut(a, from, to, fade), sr = a.sampleRate;
+  if (half) {   // 표본율 절반 — 배경 비 소리는 고음이 덜 중요하다 (용량 절반)
+    const h = new Float32Array(d.length >> 1);
+    for (let i = 0; i < h.length; i++) h[i] = (d[i * 2] + d[i * 2 + 1]) / 2;
+    d = h; sr /= 2;
+  }
+  await save(`${name}.wav`, wav(d, sr));
+}
+for (const [name, src, n, len] of STEPS) {
+  if (ONLY) break;
+  const a = await load(src), d = mono(a), sr = a.sampleRate, win = Math.round(sr * 0.02);
+  const env = [];
+  for (let i = 0; i + win < d.length; i += win) { let s = 0; for (let j = i; j < i + win; j++) s += d[j] * d[j]; env.push(Math.sqrt(s / win)); }
+  // 큰 봉우리부터, 서로 0.3초 넘게 떨어진 것만
+  const order = env.map((v, i) => [v, i]).sort((p, q) => q[0] - p[0]);
+  const picked = [];
+  for (const [, i] of order) {
+    if (picked.length >= n) break;
+    if (picked.every((j) => Math.abs(j - i) * 0.02 > 0.3)) picked.push(i);
+  }
+  picked.sort((p, q) => p - q);
+  for (const [k, i] of picked.entries()) {
+    // 봉우리 앞쪽으로 소리가 시작하는 곳까지 되짚는다
+    let s = i; while (s > 0 && env[s - 1] > env[i] * 0.15) s--;
+    const from = Math.max(0, s * 0.02 - 0.01);
+    await save(`${name}${k + 1}.wav`, wav(cut(a, from, from + len, len * 0.4), sr));
+  }
+  log(`  ${name}: ${picked.map((i) => (i * 0.02).toFixed(2)).join(', ')}초`);
+}
+log('끝');
+document.title = 'done';
+</script>
+</body>
+</html>
