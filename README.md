@@ -33,6 +33,19 @@ When a survivor goes down, they can still crawl around while bleeding out. A tea
 
 The settings menu has mouse sensitivity, volume, and a Korean/English toggle. You can also start a solo practice round against bots from the lobby.
 
+<p align="center">
+  <img src="public/ui/keyart.webp" width="720">
+</p>
+
+<p align="center">
+  <a href="https://feralfps.duckdns.org:8443">
+    <img src="https://img.shields.io/badge/▶_PLAY_NOW-B22222?style=for-the-badge" height="40">
+  </a>
+</p>
+
+> [!NOTE]
+> Early development build. The server might go down or reset at any time.
+
 ## Running it locally
 
 ```bash
