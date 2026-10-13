@@ -17,9 +17,9 @@ Every round, one random player becomes the zombie (never the same person twice i
     <th width="33%">Zombie</th>
   </tr>
   <tr>
-    <td align="center"><img src="public/ui/char_gunner.webp" width="220"></td>
-    <td align="center"><img src="public/ui/char_hunter.webp" width="220"></td>
-    <td align="center"><img src="public/ui/char_zombie.webp" width="220"></td>
+    <td align="center"><img src="public/ui/char_gunner.webp" height="300"></td>
+    <td align="center"><img src="public/ui/char_hunter.webp" height="300"></td>
+    <td align="center"><img src="public/ui/char_zombie.webp" height="300"></td>
   </tr>
   <tr>
     <td valign="top">
