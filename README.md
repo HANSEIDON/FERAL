@@ -33,6 +33,7 @@ When a survivor goes down, they can still crawl around while bleeding out. A tea
 
 The settings menu has mouse sensitivity, volume, and a Korean/English toggle. You can also start a solo practice round against bots from the lobby.
 
+## PLAY NOW
 <p align="center">
   <img src="public/ui/keyart.webp" width="720">
 </p>
