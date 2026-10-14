@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>크레인 확인</title>
+<style>html, body { margin: 0; height: 100%; background: #222; overflow: hidden; } canvas { display: block; }
+#info { position: fixed; left: 8px; top: 8px; color: #fff; font: 12px monospace; background: rgba(0,0,0,.6); padding: 6px; white-space: pre; }</style>
+</head>
+<body>
+<div id="info"></div>
+<script type="module">
+// 임시 — 받은 크레인 glTF 를 열어 크기 · 동작을 본다.  ?m=sokol|tower  ?t=초(동작 시점 고정)  ?cam=x,y,z
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const q = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x30343a);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.DirectionalLight(0xffffff, 1.5).translateX(5).translateY(10).translateZ(8));
+const grid = new THREE.GridHelper(80, 80, 0x888888, 0x444444);   // 1m 칸
+scene.add(grid);
+// 키 1.75m 생존자 기준 막대
+const man = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.75, 0.5), new THREE.MeshBasicMaterial({ color: 0xff3030 }));
+man.position.set(0, 0.875, 0); scene.add(man);
+
+const gltf = await new GLTFLoader().loadAsync(q.get('glb') ?? `/tools/tmp/crane_src/${q.get('m') ?? 'sokol'}/scene.gltf`);
+const root = gltf.scene;
+scene.add(root);
+const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3());
+const mixer = new THREE.AnimationMixer(root);
+const clip = gltf.animations[0];
+if (clip) mixer.clipAction(clip).play();
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 500);
+const c = (q.get('cam') ?? '').split(',').map(Number);
+camera.position.set(...(c.length === 3 ? c : [size.x * 1.2, size.y * 0.8, size.z * 1.6]));
+camera.lookAt(box.getCenter(new THREE.Vector3()));
+const info = document.getElementById('info');
+info.textContent = `size ${size.toArray().map((v) => v.toFixed(1)).join(' x ')} m\nmin ${box.min.toArray().map((v) => v.toFixed(1))}\nclip ${clip ? clip.duration.toFixed(1) + 's' : '-'}`;
+const fixed = q.has('t') ? +q.get('t') : null;
+window.at = (t) => { mixer.setTime(t); renderer.render(scene, camera); };
+let last = performance.now();
+renderer.setAnimationLoop(() => {
+  const now = performance.now();
+  if (fixed !== null) mixer.setTime(fixed); else mixer.update((now - last) / 1000);
+  last = now;
+  renderer.render(scene, camera);
+});
+window.THREE = THREE; window.gltf = gltf; window.mixer = mixer;
+window.info = { size: size.toArray(), min: box.min.toArray(), dur: clip?.duration };
+</script>
+</body>
+</html>

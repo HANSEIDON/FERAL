@@ -19,8 +19,9 @@ export { buildBoxes };
 
 /** 모델(mapArt.js)이 겉모습을 맡는 종류 — 모델이 뜨면 이 종류의 박스는 숨긴다 */
 export const MODEL_KINDS = new Set([
-  'container', 'crane', 'rail', 'truck', 'rack', 'barrier', 'crate', 'lamp',
+  'container', 'perimeter', 'crane', 'rail', 'truck', 'rack', 'barrier', 'crate', 'lamp',
   'barrel', 'trash', 'trashRust', 'tyres', 'shutter', 'shutterGraffiti',
+  'tank', 'forklift', 'pipe', 'pipes', 'reel', 'pipeStack', 'planks', 'cement', 'flood',
 ]);
 
 export function buildScene(scene) {
@@ -37,7 +38,7 @@ export function buildScene(scene) {
 
   // 야적장 아스팔트 + 창고 안 콘크리트 바닥 (창고 벽 x 26 ~ 바깥 벽, z ±16)
   // 바깥 담 너머까지 조금 — 좀비가 담 위에서 내려다볼 때 땅이 끊겨 보이지 않게
-  const groundW = WORLD.arenaX + 40, groundD = WORLD.arenaZ + 40;
+  const groundW = WORLD.arenaX + 140, groundD = WORLD.arenaZ + 140;   // 바깥 야적장(mapArt 배경)까지
   const ground = new Mesh(meterPlane(groundW, groundD), tileMaterial('asphalt'));
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
@@ -57,7 +58,7 @@ export function buildScene(scene) {
   for (const b of boxes) {
     const geo = meterUV(new BoxGeometry(b.w, b.h, b.d));
     let material;
-    if (b.kind === 'wall') material = corrugated;
+    if (b.kind === 'wall' || b.kind === 'perimeterWall') material = corrugated;
     else if (b.kind === 'perimeter') material = concrete;
     else if (b.kind === 'dock') {
       // 면 순서 +x -x +y -y +z -z — 윗면만 콘크리트(계단은 철판), 옆면은 녹슨 철판

@@ -2,7 +2,7 @@
 //   ?out=shots (기본) → tools/tmp/shots   캐릭터 사진 (char_shot.html)
 //   ?out=sfx          → public/sfx        효과음 (sfx_build.html)
 const http = require('http'), fs = require('fs'), path = require('path');
-const DIRS = { shots: path.join(__dirname, 'shots'), sfx: path.join(__dirname, '../../public/sfx') };
+const DIRS = { shots: path.join(__dirname, 'shots'), sfx: path.join(__dirname, '../../public/sfx'), models: path.join(__dirname, '../../public/models') };
 http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   if (req.method !== 'POST') { res.end('ok'); return; }
