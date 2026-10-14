@@ -8,6 +8,7 @@ import {
   Group, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, RingGeometry, SphereGeometry, Vector3,
 } from 'three';
 import { WORLD } from '../../shared/config.js';
+import { SlamFx } from './slamFx.js';
 
 const MAX_TRACERS = 24;
 const TRACER_LIFE = 0.06;
@@ -195,64 +196,10 @@ export class Effects {
     this.holes.push(m);
   }
 
-  /** 슈퍼점프 착지 — 바닥에 퍼지는 충격파 고리. */
-  slam(x, z, radius) {
-    if (!this.rings) {
-      this.rings = [];
-      this.ringPool = [];
-    }
-    let ring = this.ringPool.pop();
-    if (!ring) {
-      ring = new Mesh(
-        new RingGeometry(0.82, 1, 40),
-        new MeshBasicMaterial({
-          color: 0xff9a4a, transparent: true, side: DoubleSide,
-          depthWrite: false, blending: AdditiveBlending,
-        }),
-      );
-      ring.rotation.x = -Math.PI / 2;
-      this.scene.add(ring);
-    }
-    ring.position.set(x, 0.06, z);
-    ring.visible = true;
-    ring.userData = { t: 0, radius };
-    this.rings.push(ring);
-    this.spawnDust(x, z);
-  }
-
-  /** 슈퍼점프 착지 — 바닥에서 밖으로 튀어오르는 먼지.
-   *  메서드 이름을 this.dust 배열과 겹치게 하면(!this.dust) 체크가
-   *  메서드 자체를 보고 초기화를 건너뛰므로 spawnDust 로 둔다. */
-  spawnDust(x, z) {
-    if (!this.dust) {
-      this.dust = [];
-      this.dustPool = [];
-      for (let i = 0; i < 18; i++) {
-        const m = new Mesh(
-          new SphereGeometry(1, 6, 5),
-          new MeshBasicMaterial({ color: 0x9a8a72, transparent: true, depthWrite: false }),
-        );
-        m.visible = false;
-        this.scene.add(m);
-        this.dustPool.push(m);
-      }
-    }
-    for (let i = 0; i < 18; i++) {
-      const m = this.dustPool.pop() ?? this.dust.shift();
-      if (!m) break;
-      const a = Math.random() * Math.PI * 2;
-      const sp = 2.5 + Math.random() * 4.5;
-      m.position.set(x, 0.15, z);
-      m.scale.setScalar(0.1 + Math.random() * 0.16);
-      m.visible = true;
-      m.userData = {
-        t: 0,
-        life: 0.45 + Math.random() * 0.3,
-        vx: Math.cos(a) * sp, vz: Math.sin(a) * sp,
-        vy: 1.5 + Math.random() * 3.5,
-      };
-      this.dust.push(m);
-    }
+  /** 슈퍼점프 착지 — 흙먼지 · 파편 · 그을린 자국 (slamFx.js) */
+  slam(x, z, radius, y = 0) {
+    this.slamFx ??= new SlamFx(this.scene);
+    this.slamFx.spawn(x, y, z, radius);
   }
 
   update(dt, camera) {
@@ -324,45 +271,7 @@ export class Effects {
       }
     }
 
-    // 먼지 — 밖으로 튀어올랐다가 떨어지며 사라진다
-    if (this.dust?.length) {
-      for (let i = this.dust.length - 1; i >= 0; i--) {
-        const m = this.dust[i];
-        if (!m) { this.dust.splice(i, 1); continue; }   // 깨진 엔트리는 렌더 죽이지 말고 빼라
-        const u = m.userData;
-        u.t += dt / u.life;
-        if (u.t >= 1) {
-          m.visible = false;
-          this.dustPool.push(m);
-          this.dust.splice(i, 1);
-          continue;
-        }
-        m.position.x += u.vx * dt;
-        m.position.z += u.vz * dt;
-        m.position.y = Math.max(0.05, m.position.y + u.vy * dt);
-        u.vy -= 9.8 * dt;
-        m.material.opacity = 0.75 * (1 - u.t);
-      }
-    }
-
-    // 충격파 고리 — 0.5초에 걸쳐 퍼지며 사라진다
-    if (this.rings?.length) {
-      for (let i = this.rings.length - 1; i >= 0; i--) {
-        const ring = this.rings[i];
-        if (!ring) { this.rings.splice(i, 1); continue; }
-        const u = ring.userData;
-        u.t += dt / 0.5;
-        if (u.t >= 1) {
-          ring.visible = false;
-          this.ringPool.push(ring);
-          this.rings.splice(i, 1);
-          continue;
-        }
-        const s = u.radius * (0.15 + 0.85 * u.t);
-        ring.scale.set(s, s, s);
-        ring.material.opacity = 0.85 * (1 - u.t);
-      }
-    }
+    this.slamFx?.update(dt);
 
     // 흔들림은 카메라 회전에 얹는다 (위치를 흔들면 벽을 뚫는다)
     if (this.shake > 0.0005) {

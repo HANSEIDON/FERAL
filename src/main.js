@@ -14,7 +14,7 @@ import { resolveLoadout, avatarModel, WEAPONS } from '../shared/loadout.js';
 import { Net } from './core/net.js';
 import { Input, MV } from './core/input.js';
 import { buildScene, resolveCollision, raycastBoxes, groundHeight } from './game/world.js';
-import { dressMap } from './game/mapArt.js';
+import { craneLoad, dressMap, updateMapArt } from './game/mapArt.js';
 import { loadEmotes, EMOTE_COUNT } from './game/emotes.js';
 import { LocalPlayer } from './game/localPlayer.js';
 import { RemotePlayers, preloadAvatars, makeAvatar, getArrowModel } from './game/remotePlayers.js';
@@ -275,6 +275,29 @@ function updateCpr(dt) {
   }
   // 짝이 풀린 쓰러진 사람은 방향 고정을 푼다
   for (const b of bodies) if (b.avatar && b.avatar.userData.anim?.cpr !== 'get') b.avatar.userData.cprYaw = undefined;
+}
+/** 눈(from)에서 몸(pos)의 가슴 · 머리가 하나라도 보이면 true — 맵 충돌 상자로 가림 검사 */
+function inSight(from, pos) {
+  for (const h of [1.25, 1.6]) {
+    if (!segmentBlocked(from.x, from.y, from.z, pos.x, pos.y + h, pos.z)) return true;
+  }
+  return false;
+}
+function segmentBlocked(ax, ay, az, bx, by, bz) {
+  const dx = bx - ax, dy = by - ay, dz = bz - az;
+  for (const b of boxes) {
+    if (b.h < 0.9) continue;   // 낮은 턱 · 레일은 시야를 안 막는다
+    let t0 = 0, t1 = 1;
+    for (const [o, d, lo, hi] of [[ax, dx, b.x - b.w / 2, b.x + b.w / 2], [ay, dy, b.y, b.y + b.h], [az, dz, b.z - b.d / 2, b.z + b.d / 2]]) {
+      if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { t0 = 2; break; } continue; }
+      let ta = (lo - o) / d, tb = (hi - o) / d;
+      if (ta > tb) [ta, tb] = [tb, ta];
+      t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
+      if (t0 > t1) break;
+    }
+    if (t0 <= t1) return true;
+  }
+  return false;
 }
 const wrapPi = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -580,6 +603,9 @@ net.on(S.STATE, (m) => {
 
 net.on(S.EVENT, (m) => {
   switch (m.kind) {
+    case 'check':
+      menu.readyCheck(m);
+      break;
     case 'hit':
       // 내가 맞았으면 화면이 흔들리고, 내가 맞혔으면 조준점이 반응한다
       // 쓰러진 사람이 맞으면 출혈이 4초 빨라진다 (서버 applyHit 과 같다)
@@ -640,11 +666,11 @@ net.on(S.EVENT, (m) => {
       if (m.id === net.id) G.downedAt = performance.now() / 1000;
       else downTimes.set(m.id, performance.now() / 1000);
       audio.downed(m.id === net.id ? null : others.positions().find((x) => x.id === m.id)?.pos);
-      hud.toast(t(m.id === net.id ? 'tz.youDown' : 'tz.mateDown'), 'warn');
+      hud.toast(t(m.id === net.id ? 'tz.youDown' : G.role === 'zombie' ? 'tz.survDown' : 'tz.mateDown'), G.role === 'zombie' ? 'good' : 'warn');
       break;
     case 'revive':
       downTimes.delete(m.id);
-      hud.toast(t(m.id === net.id ? 'tz.youUp' : 'tz.mateUp'), 'good');
+      hud.toast(t(m.id === net.id ? 'tz.youUp' : G.role === 'zombie' ? 'tz.survUp' : 'tz.mateUp'), G.role === 'zombie' ? 'warn' : 'good');
       break;
     case 'kill':
       downTimes.delete(m.id);
@@ -660,7 +686,7 @@ net.on(S.EVENT, (m) => {
       // 내 슬램은 착지 순간에 이미 로컬에서 재생했다 — 여기에서 다시 틀면
       // 모션이 끊겨서 처음부터 다시 시작된다. 타인 슬램만 여기서 재생한다.
       if (!isMine) {
-        fx.slam(m.at[0], m.at[2], m.radius);
+        fx.slam(m.at[0], m.at[2], m.radius, m.at[1]);
         audio.thump(new Vector3(...m.at));
         fx.kick(0.35);          // 착지 충격은 화면 전체가 흔들려야 "대"가 된다
         // 충전량에 비례해 착지 모션을 빨리 감는다 — 높이 뛴 만큼 묵직하게.
@@ -832,14 +858,14 @@ function frame() {
             // 착지하는 바로 그 순간 내려찍기 모션을 재생한다. 서버 왕복을 기다리면
             // "착지"와 "내려찍기"가 따로따로 두 동작처럼 보인다 — 한 동작으로 보이게.
             const rate = slamRate(me.lastCharge ?? 0);
-            fx.slam(me.pos.x, me.pos.z, L.slamRadius);
+            fx.slam(me.pos.x, me.pos.z, L.slamRadius, me.pos.y);
             audio.thump();
             fx.kick(0.35);
             view.trigger('slam', rate);
             selfAvatar?.userData.anim?.trigger('slam', rate);
           }
         } else {
-          if (input.took('special') && startReload(t)) hud.toast(t('tz.reload'));
+          if (input.took('special')) startReload(t);   // 탄약 칸이 장전 중을 보여준다 — 알림은 띄우지 않는다
           // 3인칭 몸의 교체 동작(소총을 등에 메고 권총 뽑기)은 이동 비트 ALT 로 avatarAnim 이 튼다
           if (input.took('slot1') && weapon.select(0, t)) view.equipWeapon(weapon.spec);
           if (input.took('slot2') && weapon.select(1, t)) view.equipWeapon(weapon.spec);
@@ -945,6 +971,16 @@ function frame() {
 
   others.hold = G.hold;   // 묶임 중엔 좀비 아바타가 묶인 모션을 쓴다
   others.update(dt, net.serverTime());
+  updateMapArt(net.serverTime());   // 크레인 동작 — 모두 같은 시각의 자세
+  // 크레인 철판 위에 서 있으면 같이 실려 간다
+  {
+    const b = craneLoad.box;
+    if (b && me.onGround && Math.abs(me.pos.y - (b.y - craneLoad.delta.y + b.h)) < 0.12 &&
+        Math.abs(me.pos.x - b.x) < b.w / 2 + 0.3 && Math.abs(me.pos.z - b.z) < b.d / 2 + 0.3) {
+      me.pos.x += craneLoad.delta.x; me.pos.z += craneLoad.delta.z;
+      me.pos.y = b.y + b.h;
+    }
+  }
 
   // 캐릭터끼리 겹침 방지 — 위치 보간이 끝난 직후에 밀어낸다
   separatePlayers();
@@ -955,7 +991,8 @@ function frame() {
     const range = net.config?.BASE?.zombie?.senseRange ?? 18;
     const near = new Set();
     for (const { id, pos, state } of others.positions()) {
-      if (state !== PSTATE.DEAD && pos.distanceTo(me.pos) < range) near.add(id);
+      // 가까운데 벽에 가려진 생존자만 비친다 — 눈에 보이면 평소 모습 그대로
+      if (state !== PSTATE.DEAD && pos.distanceTo(me.pos) < range && !inSight(camera.position, pos)) near.add(id);
     }
     others.setSilhouettes(near);
   } else {
@@ -1474,7 +1511,7 @@ Object.assign(globalThis, {
   __g: {
     net, me, others, G, weapon, revive, fx, audio, camera, boxes, input, hud, view, scene,
     get self() { return selfAvatar; },
-    setSelfAvatar, frame: frameSafe,   // [debug] 창이 가려져 rAF 가 멈춘 자동화 브라우저에서 프레임을 직접 돌린다
+    setSelfAvatar, craneLoad, frame: frameSafe,   // [debug] 창이 가려져 rAF 가 멈춘 자동화 브라우저에서 프레임을 직접 돌린다
     diag,
     /** 기록을 요약해서 한눈에 보여준다. 콘솔에서 __g.report() 로 호출. */
     report() {

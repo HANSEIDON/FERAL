@@ -32,8 +32,11 @@ const players = new Map();
 /** 연습 모드에서만 채워진다. @type {Map<number, Bot>} */
 const bots = new Map();
 
+const CHECK_SEC = 12;   // 수락 확인 제한 시간
+
 const game = {
   phase: PHASE.LOBBY,
+  check: null,       // 수락 확인 중이면 { until, ids:Set, accepted:Set } — 롤처럼 전원 수락해야 시작
   startAt: 0,        // playing 진입 시각 (좀비 구속 해제)
   endAt: 0,
   lastZombieId: null, // 연속으로 좀비가 걸리지 않게
@@ -42,6 +45,22 @@ const game = {
   ammoBoxes: [],      // 현재 바닥에 있는 탄약상자 [{i, x, z, type}] — 주우면 제거된다
   ammoNextSpawnAt: 0, // 다음 탄약상자 스폰 시각 (초)
 };
+
+/** 수락 확인 진행 상황을 모두에게 */
+function sendCheck() {
+  const c = game.check;
+  broadcast(S.EVENT, { kind: 'check', left: Math.max(0, c.until - now()), total: CHECK_SEC,
+    ids: [...c.ids], accepted: [...c.accepted] });
+}
+
+/** 수락 확인 취소 — reason: declined | timeout | left */
+function cancelCheck(reason, who) {
+  if (!game.check) return;
+  game.check = null;
+  broadcast(S.EVENT, { kind: 'check', cancel: true, reason, name: who?.name ?? '' });
+  log(`수락 확인 취소 (${reason}${who ? ' · ' + who.name : ''})`);
+  sendLobby();
+}
 
 /** 대기실에 들어온 사람만 (첫 화면에 머문 접속 · 봇 스캐너 제외) */
 function joinedPlayers() {
@@ -126,9 +145,9 @@ function sendLobby() {
     // 띄울지 판단하려면 지금 서버가 어느 단계인지 알아야 한다.
     phase: game.phase,
     players: joinedPlayers().map((p) => p.lobbyInfo()),
-    canStart: joinedPlayers().length >= ROUND.minPlayers && game.phase === PHASE.LOBBY,
+    canStart: joinedPlayers().length >= ROUND.minPlayers && game.phase === PHASE.LOBBY && !game.check,
     // 연습은 혼자서도 된다
-    canPractice: joinedPlayers().length >= 1 && game.phase === PHASE.LOBBY,
+    canPractice: joinedPlayers().length >= 1 && game.phase === PHASE.LOBBY && !game.check,
   });
 }
 
@@ -330,6 +349,7 @@ function tick(dt) {
     if (t >= game.endAt) toLobby();
     return;
   }
+  if (game.check && t >= game.check.until) cancelCheck('timeout');
   if (game.phase !== PHASE.PLAYING) return;
 
   const z = theZombie();
@@ -486,7 +506,7 @@ function onMessage(p, m) {
     }
 
     case C.START: {
-      if (game.phase !== PHASE.LOBBY) return;
+      if (game.phase !== PHASE.LOBBY || game.check || !p.joined) return;
       if (m.practice) {
         startRound({
           practice: true, starter: p,
@@ -495,8 +515,26 @@ function onMessage(p, m) {
           dummies: m.dummies, behavior: m.behavior,
         });
       } else {
-        startRound();
+        // 바로 시작하지 않고 대기실 전원에게 수락을 묻는다. 누른 사람은 수락한 걸로 친다
+        const list = joinedPlayers();
+        if (list.length < ROUND.minPlayers) return;
+        game.check = { until: now() + CHECK_SEC, ids: new Set(list.map((q) => q.id)), accepted: new Set([p.id]) };
+        log(`수락 확인 시작 — ${p.name} · ${list.length}명`);
+        sendCheck();
+        sendLobby();
       }
+      break;
+    }
+
+    case C.ACCEPT: {
+      const c = game.check;
+      if (!c || !c.ids.has(p.id)) return;
+      if (!m.ok) { cancelCheck('declined', p); return; }
+      c.accepted.add(p.id);
+      if (c.accepted.size < c.ids.size) { sendCheck(); return; }
+      game.check = null;
+      broadcast(S.EVENT, { kind: 'check', done: true });
+      startRound();
       break;
     }
 
@@ -671,8 +709,10 @@ function handleAction(p, m) {
       const dodged = [];   // 착지 순간 공중이던 생존자 — 점프로 회피 성공
       for (const s of survivors()) {
         if (s.state !== PSTATE.ALIVE) continue;
-        const d = dist(p.pos, s.pos);
-        if (d > Z.slamRadius) continue;
+        // 반경은 수평으로 잰다 — 3D 거리면 컨테이너 · 트럭 위의 생존자가 높이만큼 반경 밖으로 빠졌다.
+        // 위아래로는 SLAM_REACH_Y 안이면 맞는다 (2단 컨테이너 위 · 아래 모두)
+        const d = Math.hypot(p.pos[0] - s.pos[0], p.pos[2] - s.pos[2]);
+        if (d > Z.slamRadius || Math.abs(p.pos[1] - s.pos[1]) > SLAM_REACH_Y) continue;
 
         if (s.mv & MV.AIR) { dodged.push(s.id); continue; }
 
@@ -711,6 +751,8 @@ function handleAction(p, m) {
     }
   }
 }
+
+const SLAM_REACH_Y = 6;   // 슈퍼점프 착지 충격이 닿는 위아래 높이 (m)
 
 function dist(a, b) {
   const dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
@@ -817,6 +859,7 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     players.delete(p.id);
+    if (game.check?.ids.has(p.id)) cancelCheck('left', p);
     log(`${p.name} 퇴장 (${p.ip}) — 대기실 ${joinedPlayers().length}명`);
 
     if (game.phase !== PHASE.PLAYING) { sendLobby(); return; }

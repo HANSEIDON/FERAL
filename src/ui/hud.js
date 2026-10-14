@@ -185,7 +185,7 @@ export class Hud {
     set('stam.show', hasStam, (v) => { $('stamina').style.display = v ? '' : 'none'; });
     if (hasStam) {
       set('stam.w', Math.round((stamina / maxStamina) * 100),
-          (v) => { $('stamFill').style.width = `${v}%`; });
+          (v) => { $('stamFill').style.width = `${v}%`; $('stamina').classList.toggle('low', v < 25); });
     }
   }
 
@@ -271,9 +271,8 @@ export class Hud {
     const li = document.createElement('li');
     li.textContent = text;
     li.className = kind;
-    $('feed').prepend(li);
-    setTimeout(() => li.remove(), 4500);
-    while ($('feed').children.length > 6) $('feed').lastChild.remove();
+    $('feed').replaceChildren(li);   // 한 번에 한 줄 — 겹쳐 쌓지 않는다
+    setTimeout(() => li.remove(), 4000);
   }
 
   setHint(text) {

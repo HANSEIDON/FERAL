@@ -11,7 +11,8 @@ export const C = {
   JOIN: 'join',       // { name }
   PICK: 'pick',       // { classId }          로비에서 직업 선택
   READY: 'ready',     // { ready }
-  START: 'start',     // {}                   아무나 라운드를 시작할 수 있다
+  START: 'start',     // {}                   아무나 누를 수 있다 → 수락 확인(전원 수락하면 시작)
+  ACCEPT: 'accept',   // { ok }               수락 확인에 답한다
   INPUT: 'input',     // { seq, p:[x,y,z], yaw, pitch, mv }  20Hz
   HIT: 'hit',         // { target, dmg, head }
   ACTION: 'action',   // { kind }             lunge | rage | fire | reload | revive…

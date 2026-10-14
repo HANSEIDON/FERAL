@@ -20,8 +20,12 @@ export class Net {
     this._closed = false;
   }
 
-  /** 개발 중엔 Vite 가 /ws 를 게임서버로 프록시한다. 배포하면 같은 오리진이다. */
+  /**
+   * 개발 중엔 Vite 가 /ws 를 게임서버로 프록시한다. 배포하면 같은 오리진이다.
+   * itch.io 처럼 화면만 다른 곳에 올릴 땐 빌드할 때 VITE_SERVER_URL 로 게임 서버를 박아 넣는다.
+   */
   static url() {
+    if (import.meta.env.VITE_SERVER_URL) return import.meta.env.VITE_SERVER_URL;
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${proto}//${location.host}/ws`;
   }

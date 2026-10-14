@@ -40,6 +40,8 @@ export class Menu {
     this._lobby();
     this._pause();
     this._sounds();
+    $('rcAccept').onclick = () => { this.net.send(C.ACCEPT, { ok: true }); $('rcheck').classList.add('waiting'); };
+    $('rcDecline').onclick = () => this.net.send(C.ACCEPT, { ok: false });
     onLangChange(() => { this._renderBehaviors(); if (this.lobby) this.renderLobby(this.lobby); });
     this.show('title');
   }
@@ -207,6 +209,32 @@ export class Menu {
     start.disabled = !msg.canStart;
     start.querySelector('small').textContent = msg.canStart ? '' : t('needPlayers');
     $('pStart').disabled = !msg.canPractice;
+  }
+
+  /** 수락 확인 (서버 'check' 이벤트) — 롤처럼 전원 수락해야 시작한다 */
+  readyCheck(m) {
+    const box = $('rcheck'), me = this.net.id;
+    clearInterval(this._rcTimer);
+    if (m.cancel || m.done) {
+      box.classList.remove('on', 'waiting');
+      if (m.cancel) {
+        const st = $('lStart').querySelector('small');
+        st.textContent = t(`check.${m.reason}`, { name: m.name });
+        setTimeout(() => { if (this.lobby) this.renderLobby(this.lobby); }, 3000);
+      }
+      return;
+    }
+    if (!m.ids.includes(me)) return;   // 확인이 시작된 뒤에 들어온 사람은 구경만
+    if (!box.classList.contains('on')) { box.classList.add('on'); this.sound?.ui('whoosh'); }
+    const mine = m.accepted.includes(me);
+    box.classList.toggle('waiting', mine);
+    $('rcDots').innerHTML = m.ids.map((_, i) => `<b class="${i < m.accepted.length ? 'ok' : ''}"></b>`).join('');
+    $('rcStatus').textContent = mine ? t('check.waiting', { n: m.accepted.length, total: m.ids.length }) : '';
+    // 남은 시간 막대 — 서버가 준 남은 초에서 줄여 나간다
+    const end = performance.now() + m.left * 1000, bar = $('rcBar');
+    const tick = () => { bar.style.transform = `scaleX(${Math.max(0, (end - performance.now()) / (m.total * 1000))})`; };
+    tick();
+    this._rcTimer = setInterval(tick, 50);
   }
 
   // ---------------------------------------------------------------- 대기실
