@@ -10,7 +10,8 @@
     "build": "vite build",
     "start": "node server/index.js",
     "preview": "npm run build && npm run start",
-    "pack": "vite build && tar -czf feral.tgz dist server shared deploy package.json package-lock.json"
+    "pack": "vite build && tar -czf feral.tgz dist server shared deploy package.json package-lock.json",
+    "pack:itch": "node tools/pack_itch.mjs"
   },
   "dependencies": {
     "three": "^0.186.0",

@@ -9,7 +9,7 @@
 
 import {
   BoxGeometry, CapsuleGeometry, Color, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, Vector3,
+  MeshStandardMaterial, SkinnedMesh, Vector3,
 } from 'three';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
@@ -190,7 +190,34 @@ export function makeAvatar(role, model = avatarModel(role)) {
   const g = makeModel(model) ?? makeCapsule(role);
   const b = BASE[role] ?? BASE.survivor;
 
-  // 벽 너머로 비치는 실루엣 (좀비 감각 / 아군 표시)
+  // 벽 너머로 비치는 실루엣 (좀비 감각 / 아군 표시).
+  // 모델이 있으면 몸 모양 그대로 — 같은 뼈대에 묶은 사본 메시라 동작을 따라 움직인다.
+  // (예전엔 캡슐이라 좀비 화면에 생존자마다 원통이 떠 보였다)
+  if (g.userData.anim) {
+    const tint = new Set(g.userData.tint);
+    // 벽 · 컨테이너 뒤에 가려졌을 때만 켠다 (main.js 시야 검사) — 바로 보이는 생존자는 평소 모습 그대로
+    const mat = new MeshBasicMaterial({ color: 0xff8a70, transparent: true, opacity: 0.35, depthTest: false, depthWrite: false });
+    const parts = [];
+    g.traverse((o) => {
+      if (!o.isSkinnedMesh || ![].concat(o.material).some((m) => tint.has(m))) return;   // 몸만 (총 · 활 제외)
+      const c = new SkinnedMesh(o.geometry, mat);
+      c.bind(o.skeleton, o.bindMatrix);
+      c.position.copy(o.position); c.quaternion.copy(o.quaternion); c.scale.copy(o.scale);
+      c.frustumCulled = false;
+      c.renderOrder = 998;
+      c.visible = false;
+      parts.push([o.parent, c]);
+    });
+    for (const [p, c] of parts) p.add(c);
+    if (parts.length) {
+      let on = false;
+      g.userData.sil = {
+        get visible() { return on; },
+        set visible(v) { on = v; for (const [, c] of parts) c.visible = v; },
+      };
+      return g;
+    }
+  }
   const sil = new Mesh(
     new CapsuleGeometry(b.radius * 1.06, Math.max(0.1, b.height - 2 * b.radius), 4, 10),
     new MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2, depthTest: false }),

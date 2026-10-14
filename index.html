@@ -78,15 +78,18 @@
   #timer.hold { color: var(--amber); font-size: 64px; background: none; }
   #holdHint { display: none; margin-top: 4px; font-size: 13px; letter-spacing: .05em; color: var(--amber); }
 
-  /* ── 오른쪽 위: 알림 ── */
-  #feed { position: absolute; right: 22px; top: 18px; width: 320px; list-style: none; margin: 0; padding: 0;
-          font: 13px/1.45 'Noto Sans KR', var(--hud); }
-  #feed li { background: var(--panel); border-left: 3px solid var(--steel); padding: 7px 12px; margin-bottom: 5px;
-             animation: feedIn .25s ease-out; }
-  @keyframes feedIn { from { opacity: 0; transform: translateX(14px); } }
-  #feed li.good { border-color: #6fbf73; }
-  #feed li.warn { border-color: var(--amber); }
-  #feed li.bad { border-color: var(--blood); }
+  /* ── 가운데 위 (타이머 아래): 알림 한 줄 — 새 알림이 오면 바꿔 쓴다 ── */
+  #feed { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); list-style: none; margin: 0; padding: 0;
+          font: 500 15px/1.4 'Noto Sans KR', var(--hud); letter-spacing: .02em; text-align: center; pointer-events: none; }
+  #feed li { color: #e8e3da; text-shadow: 0 1px 3px #000, 0 0 12px #000a; white-space: nowrap;
+             animation: feedIn .2s ease-out, feedOut .6s ease-in 3.4s forwards; }
+  #feed li::before { content: ''; display: inline-block; width: 6px; height: 6px; margin: 0 9px 2px 0; transform: rotate(45deg); background: var(--steel); }
+  @keyframes feedIn { from { opacity: 0; transform: translateY(-6px); } }
+  @keyframes feedOut { to { opacity: 0; } }
+  #feed li.good::before { background: #6fbf73; }
+  #feed li.warn::before { background: var(--amber); }
+  #feed li.bad { color: #f0c8c2; }
+  #feed li.bad::before { background: var(--blood); }
   #fps { position: absolute; right: 22px; bottom: 8px; font-size: 11px; color: #8e97a688; font-variant-numeric: tabular-nums; }
   #fps.bad { color: var(--blood); }
   #practiceTag { display: none; position: absolute; top: 18px; left: 22px; font-size: 12px; letter-spacing: .12em;
@@ -109,7 +112,12 @@
   .seg.thin > i { -webkit-mask: none; mask: none; }
   #hpFill { background: linear-gradient(90deg, #e9e3d8, #fff6ea); }
   body.low-hp #hpFill { background: linear-gradient(90deg, #a01d17, var(--blood)); }
-  #stamFill { background: #7fa7d9; }
+  /* 스테미나 — 나트륨 주황. 바닥나면 탁한 빨강으로 깜빡인다 */
+  #stamina .seg.thin { height: 4px; background: #ffffff10; }
+  #stamFill { background: linear-gradient(90deg, #c9773a, var(--amber)); box-shadow: 0 0 6px #ffb46e66; transition: width .15s linear, background .3s; }
+  #stamina.low #stamFill { background: linear-gradient(90deg, #7a1f19, #b8402e); box-shadow: none; animation: stamLow .6s ease-in-out infinite alternate; }
+  #stamina.low .vlab { color: #b8402e; }
+  @keyframes stamLow { to { opacity: .45; } }
   #hpText { width: 46px; text-align: right; font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1; }
   #bleed, #bleedHint, #abil { display: none; }
   body.is-downed #hpRow, body.is-downed #stamina { display: none; }
@@ -356,6 +364,25 @@
   .cta.primary:disabled { background: #ffffff10; color: #ffffff55; cursor: default; }
   .cta.ghost { margin-top: 8px; background: #ffffff0c; color: #e8e3da; }
   .cta.ghost:hover { background: #ffffff18; }
+
+  /* 수락 확인 */
+  #rcheck { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; background: #000000b0; backdrop-filter: blur(3px); }
+  #rcheck.on { display: grid; animation: rcIn .25s ease-out; }
+  @keyframes rcIn { from { opacity: 0; transform: scale(1.04); } }
+  #rcheck .card { width: min(440px, calc(100vw - 32px)); padding: 28px 28px 22px; background: linear-gradient(180deg, #11151d, #07090d);
+                  border-top: 3px solid var(--amber); clip-path: polygon(0 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%); }
+  #rcheck .rk { font-size: 12px; letter-spacing: .3em; color: var(--amber); opacity: .85; }
+  #rcheck .rh { font-size: 34px; letter-spacing: .06em; margin: 4px 0 16px; color: #f2eee6; }
+  html[lang=ko] #rcheck .rh { font-family: var(--ko); letter-spacing: 0; }
+  #rcheck .dots { display: flex; gap: 6px; margin-bottom: 10px; }
+  #rcheck .dots b { flex: 1; height: 6px; background: #ffffff18; transition: background .2s; }
+  #rcheck .dots b.ok { background: var(--amber); box-shadow: 0 0 8px #ffb46e88; }
+  #rcheck .bar { height: 2px; background: #ffffff14; margin-bottom: 18px; }
+  #rcheck .bar i { display: block; height: 100%; background: #e8e3da; transform-origin: left; }
+  #rcheck .rb { display: grid; gap: 0; }
+  #rcheck .cta { text-align: center; }
+  #rcheck .rs { min-height: 18px; margin-top: 12px; font-size: 13px; color: var(--steel); text-align: center; }
+  #rcheck.waiting #rcAccept, #rcheck.waiting #rcDecline { display: none; }
   #practiceBox { max-height: 0; overflow: hidden; transition: max-height .35s ease; }
   #practiceBox.open { max-height: 320px; }
   #practiceBox .inner { padding: 6px 2px 0; }
@@ -541,6 +568,19 @@
     <div class="lfoot" data-i18n="keys"></div>
     <div class="conn" data-i18n="connecting"></div>
   </section>
+
+  <!-- 수락 확인 — 누가 게임 시작을 누르면 대기실 전원에게 뜬다 -->
+  <div id="rcheck"><div class="card">
+    <div class="rk" data-i18n="check.title"></div>
+    <div class="rh" data-i18n="check.found"></div>
+    <div class="dots" id="rcDots"></div>
+    <div class="bar"><i id="rcBar"></i></div>
+    <div class="rb">
+      <button class="cta primary" id="rcAccept" data-i18n="check.accept"></button>
+      <button class="cta ghost" id="rcDecline" data-i18n="check.decline"></button>
+    </div>
+    <div class="rs" id="rcStatus"></div>
+  </div></div>
 
   <!-- 일시정지 (라운드 중 Esc) -->
   <section id="scrPause">

@@ -24,6 +24,14 @@ import { WORLD } from './config.js';
 
 /** 경계 — 바깥 벽 안쪽 면까지의 거리 (중심 기준) */
 export const HALF_X = WORLD.arenaX / 2;
+
+/** 야적장 소품 크기 [가로 x, 높이, 세로 z] (m) — tools/tmp/yard_build.html 이 yard_props.glb 를 구우며 잰 값 */
+export const YARD_SIZE = {
+  tank: [2.74, 5.69, 6.22], forklift: [1.18, 2.12, 3.71], pipe: [1.5, 1.13, 1.51], pipes: [1.6, 1.14, 2.82],
+  reel: [1.58, 1.27, 1.58], pipeStack: [2.23, 2.18, 3.16], planks: [1.84, 0.59, 3.37], cement: [1.86, 0.76, 2.5],
+};
+/** 투광등 탑 자리 */
+export const FLOOD_TOWERS = [[-13, -11.2], [8, 10]];
 export const HALF_Z = WORLD.arenaZ / 2;
 
 /** 컨테이너 — 40ft 12m · 20ft 6m, 폭 2.5m, 한 단 2.6m */
@@ -41,6 +49,11 @@ export function buildBoxes() {
   const wallProp = (kind, x, z, w, h, d, rot, y = 0) => b.push({ kind, x, y, z, w, h, d, rot });
   // X 방향으로 누운 컨테이너 (x0~x1), Z 방향 컨테이너 (z0~z1). tiers = 쌓은 단 수
   const contX = (x0, x1, z, tiers = 1) => put('container', (x0 + x1) / 2, z, x1 - x0, CONT_H * tiers, CONT_W);
+  // 야적장 소품 — 크기는 YARD_SIZE (모델에서 잰 값). alongX 면 긴 쪽(모델 Z)을 X 로 눕힌다
+  const yard = (kind, x, z, alongX = false, y = 0) => {
+    const [w, h, l] = YARD_SIZE[kind];
+    put(kind, x, z, alongX ? l : w, h, alongX ? w : l, y);
+  };
   const contZ = (x, z0, z1, tiers = 1) => put('container', x, (z0 + z1) / 2, CONT_W, CONT_H * tiers, z1 - z0);
   const W = HALF_X - 0.5, N = HALF_Z - 0.5;   // 바깥 벽 안쪽 면
 
@@ -48,28 +61,37 @@ export function buildBoxes() {
   // 줄 간격 6.5~7m → 골목 폭 4~4.5m. 줄마다 끊긴 자리(3m)를 엇갈려 둬서
   // 남북으로 빠지는 샛길이 여럿이다. 벽에 붙은 줄은 그쪽 끝이 막다른 골목이다.
   contX(-W, -27.5, -20, 2); contX(-24.5, -18.5, -20);
-  contX(-36.5, -30.5, -13.5); contX(-27.5, -15.5, -13.5);
+  contX(-36.5, -30.5, -13.5);
+  // 자재 야적장 — 높이가 들쭉날쭉한 낮은 엄폐물 (파이프 더미 2.2m · 콘크리트 관 1.1m · 케이블 릴 1.3m · 시멘트 0.8m)
+  yard('pipeStack', -25.4, -13.5, true); yard('pipes', -21.6, -13.5, true);
+  yard('reel', -18.8, -14.1); yard('cement', -16.6, -12.9);
   contX(-W, -27.5, -7); contX(-24.5, -18.5, -7, 2);
-  contX(-34.5, -22.5, 0, 2);
+  // 가운데 줄은 컨테이너 대신 화학 탱크 둘 (5.7m — 좀비만 오른다)
+  yard('tank', -31.6, 0, true); yard('tank', -25.2, 0, true);
   contX(-W, -33.5, 7); contX(-30.5, -18.5, 7);
-  contX(-36.5, -24.5, 13.5, 2); contX(-21.5, -15.5, 13.5);
-  contX(-W, -33.5, 20); contX(-30.5, -18.5, 20);
+  contX(-36.5, -24.5, 13.5, 2);
+  yard('forklift', -19.2, 13.5, true);          // 컨테이너 하나 대신 지게차 — 골목이 그만큼 트인다
+  contX(-W, -33.5, 20);
+  yard('forklift', -27.5, 20, true); yard('cement', -23.4, 20.2, true); yard('planks', -20, 19.8, true);
 
   // ── 가운데: 크레인 광장 (x -15 ~ 15) ──
-  // 갠트리 크레인 (높이 15.5m, 거더가 X 로 가로지른다) — 충돌은 사람 키 높이까지만:
-  // 다리 발마다 바퀴 대차(1.35m, 맨몸 점프로는 못 오른다)와 그 위 기둥. 대차는 레일(0.24m) 위에
-  // 앉아 있어서 레일에 올라서면 대차까지 뛰어오른다. 거더(12m 위)는 아무도 못 닿는다.
-  // 수치는 tools/build_map.mjs 가 모델에서 잰 값
-  for (const sx of [-9, 9]) {
-    put('rail', sx, 0, 1.05, 0.24, 24);
-    for (const sz of [-2.6, 2.6]) {
-      put('crane', sx, sz, 0.65, 1.35, 2.15);
-      put('crane', sx, sz, 0.45, 3.15, 0.45, 1.35);
-    }
+  // 부두 크레인 "Sokol" (CRANE.scale 배, 높이 약 21m). 팔은 -X 로 뻗어 철판을 옮긴다 (mapArt.js 가 동작 ·
+  // 움직이는 발판을 맡는다 — 철판은 0.6m ↔ 1.75m 로 오르내리며 x -14 ↔ -6.5 를 오간다).
+  // 충돌은 사람 · 좀비가 닿는 데까지만 — 바퀴 대차 넷(0.9m), 다리 기둥, 다리 위 둥근 갑판(3.9m, 슈퍼점프로 오른다),
+  // 그 위 회전 기둥. 팔은 12m 위라 아무도 못 닿는다. 수치는 tools/tmp/crane_view.html 로 모델에서 잰 값
+  for (const [fx, fz] of [[3.15, 2.81], [3.15, -2.97], [-2.65, 2.81], [-2.65, -2.97]]) {   // 모델을 180° 돌려 놓았다
+    put('crane', fx, fz, 2.12, 0.9, 0.5);
+    put('crane', fx * 0.8, fz * 0.8, 0.5, 3.5, 0.5, 0.9);
   }
+  put('crane', 0.25, -0.08, 5.2, 0.45, 5.2, 3.45);    // 다리 위 갑판
+  put('crane', 0.25, -0.08, 2.2, 8, 2.2, 3.9);        // 회전 기둥 · 운전실 밑
+  contX(-10, -6, 3.75);                               // 철판이 높이 올라왔을 때 옮겨 타는 컨테이너
   // 엇갈린 컨테이너 — 하역장에서 광장 너머 골목까지 한눈에 보이지 않게
   contX(-8, 4, 16);
-  contX(-2, 10, -16);
+  // 광장 남쪽 — 컨테이너 대신 자재 더미 (한 줄로 막지 않고 사이로 지나간다)
+  yard('pipe', -0.6, -16); yard('pipes', 2.6, -16.4, true); yard('reel', 6, -15.6); yard('pipeStack', 9.3, -16, true);
+  // 투광등 탑 (8m) — 광장 양쪽. 불빛은 mapArt.js
+  for (const [x, z] of FLOOD_TOWERS) { put('flood', x, z, 0.9, 0.4, 0.9); put('flood', x, z, 0.3, 8, 0.3, 0.4); }
   contZ(-12.5, -10, -4);
   contZ(12.5, 3, 9, 2);          // 크레인 대차(9, 2.6)와 1.9m
   contZ(15, -6, 0);              // 하역장 한복판에서 광장이 훤히 보이지 않게 (좀비는 뛰어오른다)
@@ -102,6 +124,7 @@ export function buildBoxes() {
   put('dock', 23.35, 11.3, 4.7, 0.85, 0.6);
   put('dock', 23.35, 11.9, 4.7, 0.6, 0.6);
   put('dock', 23.35, 12.5, 4.7, 0.3, 0.6);
+  yard('cement', 22.6, -6, false, 1.1);         // 하역장 위 시멘트 팔레트
   // 세워 둔 트레일러(11.6m) — 하역장에서 북쪽·남쪽 길이 바로 보이지 않게
   put('truck', 17.5, 13, 2.56, 3.6, 11.6);
   put('truck', 18, -15, 2.56, 3.6, 11.6);
@@ -126,21 +149,33 @@ export function buildBoxes() {
   put('trash', 23, -11 - TR[2] / 2, TR[0], TR[1], TR[2]);        // 하역장 남쪽 면
   put('trashRust', 22, -N + TR[2] / 2, TR[0], TR[1], TR[2]);      // 남쪽 벽
   put('tyres', -W + TY / 2, 3, TY, 0.48, TY);                     // 서쪽 벽
-  put('tyres', 10 + TY / 2, -16, TY, 0.48, TY);                   // 광장 남쪽 컨테이너 끝
+  put('tyres', 11.3, -16, TY, 0.48, TY);                          // 광장 남쪽 파이프 더미 끝
   put('tyres', W - TY / 2, 15.7 - TY / 2, TY, 0.48, TY);          // 창고 북동 구석
   // 닫힌 셔터 문(2.7 × 2.4m, 두께 0.3) — 벽에 붙은 채 열리지 않는다. 하역장 문은 단 위(1.1m)에 있다
   const SH = 0.3;
-  wallProp('shutter', -14, N - SH / 2, 2.7, 2.4, SH, Math.PI);
-  wallProp('shutterGraffiti', 0, -N + SH / 2, 2.7, 2.4, SH, 0);
   wallProp('shutter', 28, 16 + T / 2 + SH / 2, 2.7, 2.4, SH, 0);              // 창고 북쪽 벽 바깥
   wallProp('shutter', WX - T / 2 - SH / 2, 8, SH, 2.4, 2.7, -Math.PI / 2, 1.1); // 하역장 위 창고 문
   wallProp('shutterGraffiti', WX - T / 2 - SH / 2, -13.5, SH, 2.4, 2.7, -Math.PI / 2);
 
-  // ── 바깥 벽 (4m) ──
-  put('perimeter', 0, HALF_Z, WORLD.arenaX, 4, 1);
-  put('perimeter', 0, -HALF_Z, WORLD.arenaX, 4, 1);
-  put('perimeter', HALF_X, 0, 1, 4, WORLD.arenaZ);
-  put('perimeter', -HALF_X, 0, 1, 4, WORLD.arenaZ);
+  // ── 바깥 테두리: 2단 컨테이너 줄 (5.2m) ──
+  // 안쪽 면은 예전 담과 같은 자리(±HALF - 0.5)라 벽에 붙은 소품은 그대로다. 좀비는 슈퍼점프로 올라서서
+  // 위를 걸어 다닌다 (clampToArena 0 — 컨테이너 위 안쪽 절반까지). 겉모습은 mapArt.js 가 컨테이너로 채운다.
+  const PH = CONT_H * 2, PO = 0.5 - CONT_W / 2;   // 높이 · 중심을 담 선에서 바깥으로 민 양
+  const row = (alongX, at, from, to, n) => {
+    const len = (to - from) / n;
+    for (let i = 0; i < n; i++) {
+      const c = from + len * (i + 0.5);
+      if (alongX) put('perimeter', c, at, len, PH, CONT_W); else put('perimeter', at, c, CONT_W, PH, len);
+    }
+  };
+  const OX = HALF_X - PO, OZ = HALF_Z - PO;
+  row(true, OZ, -OX - CONT_W / 2, OX + CONT_W / 2, 7);
+  row(true, -OZ, -OX - CONT_W / 2, OX + CONT_W / 2, 7);
+  // 동쪽은 창고 뒷벽(z ±16)이라 컨테이너가 아니라 철판 벽 — 보안등이 여기 달린다
+  row(false, OX, -OZ + CONT_W / 2, -16, 1);
+  put('perimeterWall', OX, 0, CONT_W, PH, 32);
+  row(false, OX, 16, OZ - CONT_W / 2, 1);
+  row(false, -OX, -OZ + CONT_W / 2, OZ - CONT_W / 2, 4);
 
   return b;
 }
@@ -168,7 +203,7 @@ export const SECURITY_LIGHTS = [
   { x: 39.5, y: 3.6, z: -8, rot: -Math.PI / 2, light: true },     // 창고 안 동쪽 벽
   { x: 39.5, y: 3.6, z: 8, rot: -Math.PI / 2, light: true },
   { x: 36, y: 3.6, z: 15.7, rot: Math.PI },                       // 창고 안 북쪽 · 남쪽 벽
-  { x: 36, y: 3.6, z: -15.7, rot: 0 },
+  { x: 38.3, y: 3.6, z: -15.7, rot: 0 },                          // 남쪽 벽 (문 x 34~37 을 피해서)
 ];
 
 /**
