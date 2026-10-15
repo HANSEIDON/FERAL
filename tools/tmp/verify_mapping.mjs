@@ -2,9 +2,12 @@
 // fbxPos[i] ≈ glbPos[glbIndex[i]] 가 전부 성립하면 스킨 가중치 이식이 가능하다.
 import { readFileSync } from 'node:fs';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
-const GLB = 'C:/Users/haki0/Downloads/ComfyUI_00018.glb';
-const FBX = 'C:/Users/haki0/Downloads/모션/Standing Idle 01.fbx';
+const GLB = DOWNLOADS_DIR + '/ComfyUI_00018.glb';
+const FBX = DOWNLOADS_DIR + '/모션/Standing Idle 01.fbx';
 
 const buf = readFileSync(GLB);
 const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);

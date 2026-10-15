@@ -27,9 +27,12 @@ import sharp from 'sharp';
 import { MeshoptSimplifier } from 'meshoptimizer';
 import fs from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
-const BOW_DIR = 'C:/Users/haki0/Downloads/asian_composite_bow';
-const ARROW_DIR = 'C:/Users/haki0/Downloads/cc0_-_wooden_arrow';
+const BOW_DIR = DOWNLOADS_DIR + '/asian_composite_bow';
+const ARROW_DIR = DOWNLOADS_DIR + '/cc0_-_wooden_arrow';
 const OUT_PATH = path.join(process.cwd(), 'public/models/hunter_props.glb');
 const GUN_OUT_PATH = path.join(process.cwd(), 'public/models/gunner_props.glb');
 const AMMO_OUT_PATH = path.join(process.cwd(), 'public/models/ammo_props.glb');
@@ -259,8 +262,8 @@ const arrow = readGltf(ARROW_DIR);
 // 3. 총 (총수) — 여러 부품 · 여러 재질
 // ────────────────────────────────────────────────────────────────
 // 좌표: 손잡이(오른손이 쥐는 곳) = 원점, 총구 = +Z, 위 = +Y (단위 m).
-const RIFLE_DIR = 'C:/Users/haki0/Downloads/m4_free';
-const PISTOL_DIR = 'C:/Users/haki0/Downloads/colt_1911_game_ready';
+const RIFLE_DIR = DOWNLOADS_DIR + '/m4_free';
+const PISTOL_DIR = DOWNLOADS_DIR + '/colt_1911_game_ready';
 const RIFLE_LEN = 0.84;     // M4 개머리판을 편 길이
 // M1911 실물은 21.6cm 인데 3인칭에서 두 손에 묻혀 작아 보인다 — 조금 키운다
 const PISTOL_LEN = 0.25;
@@ -397,9 +400,9 @@ pistol = { ...pistol, ...(await simplify(pistol, PISTOL_TRIS, '권총')) };
 // 둘 다 군용 탄약통이다. 소총은 "5.56MM M855" 가 찍힌 Case Bullet — 총수 소총(M4)의 탄이다.
 // 권총은 Ammo Case(7.62mm 표기라 권총탄은 아니다). 멀리서 구분되게 소총 쪽을 더 크게 잡는다.
 const AMMO = {
-  rifle: { dir: 'C:/Users/haki0/Downloads/case_bullet', len: 0.40, tris: 1500 },
+  rifle: { dir: DOWNLOADS_DIR + '/case_bullet', len: 0.40, tris: 1500 },
   // 두께가 9cm 뿐이라 옆에서 보면 막대처럼 가늘다 — 조금 키운다
-  pistol: { dir: 'C:/Users/haki0/Downloads/ammo_case', len: 0.36, tris: 1500 },
+  pistol: { dir: DOWNLOADS_DIR + '/ammo_case', len: 0.36, tris: 1500 },
 };
 const ammo = {};
 for (const [type, a] of Object.entries(AMMO)) {

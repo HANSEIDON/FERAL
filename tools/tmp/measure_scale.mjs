@@ -2,8 +2,11 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import fs from 'node:fs';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
-const buf = fs.readFileSync('C:/Users/haki0/Downloads/모션/Standing Idle 01.fbx');
+const buf = fs.readFileSync(DOWNLOADS_DIR + '/모션/Standing Idle 01.fbx');
 const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 const group = new FBXLoader().parse(ab, '');
 

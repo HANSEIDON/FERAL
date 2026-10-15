@@ -6,8 +6,11 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
-const MOTION = 'C:/Users/haki0/Downloads/모션';
+const MOTION = DOWNLOADS_DIR + '/모션';
 const buf = fs.readFileSync(path.join(process.cwd(), 'public/models/hunter.glb'));
 const gltf = await new GLTFLoader().parseAsync(
   buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');

@@ -28,8 +28,11 @@ import sharp from 'sharp';
 import { MeshoptSimplifier } from 'meshoptimizer';
 import fs from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
-const DL = 'C:/Users/haki0/Downloads';
+const DL = DOWNLOADS_DIR;
 const PH = `${DL}/polyhaven_gltf`;
 const OUT_GLB = path.join(process.cwd(), 'public/models/map_props.glb');
 const OUT_TEX = path.join(process.cwd(), 'public/textures/map');

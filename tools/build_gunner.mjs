@@ -25,8 +25,11 @@ import { MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
 import fs from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
-const DOWNLOADS = 'C:/Users/haki0/Downloads';
+const DOWNLOADS = DOWNLOADS_DIR;
 const MOTION_DIR = path.join(DOWNLOADS, '총모션');
 const SRC = path.join(MOTION_DIR, 'Ch35_nonPBR.fbx');
 const OUT_PATH = path.join(process.cwd(), 'public/models/gunner.glb');
