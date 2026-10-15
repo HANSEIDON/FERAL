@@ -22,10 +22,13 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
 const ROOT = process.cwd();
-const GLB_PATH = 'C:/Users/haki0/Downloads/ComfyUI_00018.glb';
-const MOTION_DIR = 'C:/Users/haki0/Downloads/모션';
+const GLB_PATH = DOWNLOADS_DIR + '/ComfyUI_00018.glb';
+const MOTION_DIR = DOWNLOADS_DIR + '/모션';
 const OUT_PATH = path.join(ROOT, 'public/models/hunter.glb');
 const TARGET_HEIGHT = 1.75;
 

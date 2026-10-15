@@ -8,10 +8,13 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
 // 이미지는 비교와 무관하다 — 디코드하지 않고 빈 텍스처로 바로 넘긴다
 THREE.TextureLoader.prototype.load = (url, onLoad) => { const t = new THREE.Texture(); setTimeout(() => onLoad?.(t)); return t; };
-const DIR = 'C:/Users/haki0/Downloads/총모션';
+const DIR = DOWNLOADS_DIR + '/총모션';
 const toAB = (b) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
 const glbBuf = fs.readFileSync(path.join(process.cwd(), 'public/models/gunner.glb'));
 const gltf = await new GLTFLoader().parseAsync(toAB(glbBuf), '');

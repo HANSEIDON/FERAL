@@ -20,8 +20,11 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
-const DL = 'C:/Users/haki0/Downloads';
+const DL = DOWNLOADS_DIR;
 const EMOTES = [
   ['emote1', 'Head Spinning'],
   ['emote2', 'Snake Hip Hop Dance'],

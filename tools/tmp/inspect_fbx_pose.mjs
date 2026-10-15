@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs';
 globalThis.self = globalThis;
 import { Box3 } from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 const toAB = (b) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
 const fbx = new FBXLoader();
-const f = 'C:/Users/haki0/Downloads/모션/Standing Idle 01.fbx';
+const f = DOWNLOADS_DIR + '/모션/Standing Idle 01.fbx';
 const obj = fbx.parse(toAB(readFileSync(f)), '');
 // rest pose bbox
 obj.updateMatrixWorld(true);

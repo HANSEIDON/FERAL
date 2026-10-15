@@ -6,6 +6,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
 const buf = fs.readFileSync(path.join(process.cwd(), 'public/models/hunter.glb'));
 const gltf = await new GLTFLoader().parseAsync(
@@ -16,7 +19,7 @@ const gSI = mesh.geometry.attributes.skinIndex.array;
 const gSW = mesh.geometry.attributes.skinWeight.array;
 const gBones = mesh.skeleton.bones.map((b) => b.name);
 
-const fbuf = fs.readFileSync('C:/Users/haki0/Downloads/모션/Standing Run Forward.fbx');
+const fbuf = fs.readFileSync(DOWNLOADS_DIR + '/모션/Standing Run Forward.fbx');
 const fg = new FBXLoader().parse(fbuf.buffer.slice(fbuf.byteOffset, fbuf.byteOffset + fbuf.byteLength), '');
 let fm = null; fg.traverse((o) => { if (o.isMesh) fm = o; });
 const fSI = fm.geometry.attributes.skinIndex.array;
@@ -26,7 +29,7 @@ const fBones = fm.skeleton.bones.map((b) => b.name);
 console.log('뼈대 순서 동일:', JSON.stringify(gBones) === JSON.stringify(fBones));
 
 // GLB 인덱스로 FBX 정점 위치 찾기
-const obuf = fs.readFileSync('C:/Users/haki0/Downloads/ComfyUI_00018.glb');
+const obuf = fs.readFileSync(DOWNLOADS_DIR + '/ComfyUI_00018.glb');
 const ogltf = await new GLTFLoader().parseAsync(
   obuf.buffer.slice(obuf.byteOffset, obuf.byteOffset + obuf.byteLength), '');
 let oMesh = null;

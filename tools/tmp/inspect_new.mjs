@@ -4,9 +4,12 @@ globalThis.self = globalThis;   // GLTFLoader 가 쓰는 브라우저 전역
 import { Box3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { homedir } from 'node:os';
+// 받은 원본이 있는 다운로드 폴더 — 다른 곳이면 FERAL_DOWNLOADS 로 바꾼다
+const DOWNLOADS_DIR = process.env.FERAL_DOWNLOADS ?? `${homedir()}/Downloads`;
 
-const GLB = 'C:/Users/haki0/Downloads/ComfyUI_00018.glb';
-const MOT = 'C:/Users/haki0/Downloads/모션';
+const GLB = DOWNLOADS_DIR + '/ComfyUI_00018.glb';
+const MOT = DOWNLOADS_DIR + '/모션';
 
 // Node Buffer 는 ArrayBuffer 가 아니라서 로더가 텍스트로 오인한다
 const toAB = (buf) => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
