@@ -378,6 +378,12 @@ export class RemotePlayers {
         }
       }
 
+      // 사람 좀비의 주먹 — 클릭(FIRE)이 켜지는 순간 스윙을 튼다. 예전엔 더미(봇)만 'attack' 이벤트로
+      // 스윙이 나오고 사람 좀비는 아무것도 안 걸려 있어서, 다른 사람 화면에선 주먹질이 안 보였다.
+      const fire = !!(e.mv & MV.FIRE);
+      if (anim && fire && !e.prevFire && this.roles.get(id) === 'zombie' && !this.bots.has(id) && this.hold <= 0) anim.trigger('attack');
+      e.prevFire = fire;
+
       if (anim) {
         // 묶여 있는 동안(라운드 시작) — 좀비는 서 있기 모션만
         if (this.hold > 0 && this.roles.get(id) === 'zombie') {
