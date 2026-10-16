@@ -65,6 +65,7 @@ export class Bot {
       y: +this.yaw.toFixed(3), pi: 0,
       // mhp(최대 체력)가 빠지면 클라이언트 체력바가 0으로 보이며
       // "때려도 아무 반응이 없다" 로 보였다 — 플레이어 스냅샷과 맞춰준다.
+      pt: +(Date.now() / 1000).toFixed(3),   // 더미는 서버 틱에서 움직인다 — 지금이 잰 시각
       mv: this.mv, hp: Math.round(this.hp), mhp: this.maxHp, st: this.state,
     };
   }

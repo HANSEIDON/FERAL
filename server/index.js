@@ -97,7 +97,9 @@ class Player {
     this.yaw = 0;
     this.pitch = 0;
     this.mv = 0;           // 이동 플래그 비트 (애니메이션용)
-    this.mvPulse = 0;      // 방송 사이에 한 번이라도 켜졌던 짧은 비트 (주먹 FIRE · 점프 AIR) — 아래 설명
+    this.mvPulse = 0;
+    this.pt = 0;           // 이 위치를 잰 시각 (서버 시계) — 아래 C.INPUT 설명
+    this.ctOff = null;     // 이 클라이언트 시계 → 서버 시계 차이 (지연이 가장 짧았던 쪽으로 맞춘다)      // 방송 사이에 한 번이라도 켜졌던 짧은 비트 (주먹 FIRE · 점프 AIR) — 아래 설명
     this.seq = 0;
 
     this.downedAt = 0;
@@ -117,7 +119,7 @@ class Player {
     return {
       id: this.id, p: this.pos.map((v) => +v.toFixed(2)),
       y: +this.yaw.toFixed(3), pi: +this.pitch.toFixed(3),
-      mv: this.mv | this.mvPulse, hp: Math.round(this.hp), mhp: this.maxHp, st: this.state,
+      pt: +this.pt.toFixed(3), mv: this.mv | this.mvPulse, hp: Math.round(this.hp), mhp: this.maxHp, st: this.state,
     };
   }
 
@@ -553,6 +555,15 @@ function onMessage(p, m) {
       if (typeof m.seq === 'number' && m.seq <= p.seq) return;   // 늦게 도착한 건 버린다
       p.seq = m.seq ?? p.seq + 1;
       p.pos = m.p.map(Number);
+      // 위치를 잰 시각을 같이 넘긴다. 입력(20Hz)과 방송(20Hz)은 박자가 안 맞아서, 방송 시각으로 보간하면
+      // 같은 위치가 두 번 나갔다가 다음에 두 칸을 건너뛰어 남의 화면에서 뚝뚝 끊겼다.
+      // 클라이언트 시계(ct)를 서버 시계로 바꿔 쓴다 — 차이는 지연이 가장 짧았던 쪽(최솟값)으로 천천히 맞춘다
+      const t = now();
+      if (typeof m.ct === 'number' && Number.isFinite(m.ct)) {
+        const off = t - m.ct;
+        p.ctOff = p.ctOff === null || off < p.ctOff ? off : p.ctOff + (off - p.ctOff) * 0.02;
+        p.pt = Math.min(t, m.ct + p.ctOff);
+      } else p.pt = t;
       p.yaw = Number(m.yaw) || 0;
       p.pitch = Number(m.pitch) || 0;
       p.mv = m.mv | 0;

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>lobby shot</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}iframe{border:0;width:100%;height:100%;display:block}</style>
+</head>
+<body>
+<iframe id="f" src="/?offline"></iframe>
+<script>
+// 임시 — 캐릭터 선택(대기실) 화면을 영어로 채워 둔다. 헤드리스 크롬 --screenshot 으로 찍는다.
+const f = document.getElementById('f');
+f.onload = () => {
+  const w = f.contentWindow;
+  const go = () => {
+    if (!w.__g?.menu) return setTimeout(go, 200);
+    const d = w.document, m = w.__g.menu;
+    d.querySelector('.lang[data-lang="en"]')?.click();
+    w.__g.net.id = 1; m.joined = true;
+    m.showLobby();
+    m.renderLobby({ phase: 'lobby', canStart: true, canPractice: true, practiceBy: '', players: [
+      { id: 1, name: 'HANSEIDON', classId: 'archer' }, { id: 2, name: 'Mika', classId: 'default' },
+      { id: 3, name: 'dokgo', classId: 'default' }, { id: 4, name: 'Rin', classId: 'archer' },
+    ] });
+    const c = d.querySelector('#scrLobby .conn'); if (c) c.style.display = 'none';
+    document.title = 'ready';
+  };
+  go();
+};
+</script>
+</body>
+</html>

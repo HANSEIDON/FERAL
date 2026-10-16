@@ -605,7 +605,7 @@ net.on(S.STATE, (m) => {
   G.left = m.left;
   G.hold = m.hold;
 
-  others.apply(m.players, net.id, m.now);
+  others.apply(m.players, net.id, m.now, net.serverTime());
 
   // 서버가 정한 내 체력·상태를 그대로 받는다 (여기는 서버가 권위를 갖는다)
   const mine = m.players.find((p) => p.id === net.id);
@@ -978,6 +978,7 @@ function frame() {
     sendAcc = 0;
     net.send(C.INPUT, {
       seq: ++seq,
+      ct: +(performance.now() / 1000).toFixed(3),   // 이 위치를 잰 시각 (내 시계) — 서버가 서버 시계로 바꿔 남에게 넘긴다
       p: [+me.pos.x.toFixed(2), +me.pos.y.toFixed(2), +me.pos.z.toFixed(2)],
       yaw: +me.yaw.toFixed(3),
       pitch: +me.pitch.toFixed(3),
@@ -1537,7 +1538,7 @@ Object.assign(globalThis, {
   __g: {
     net, me, others, G, weapon, revive, fx, audio, camera, boxes, input, hud, view, scene,
     get self() { return selfAvatar; },
-    setSelfAvatar, craneLoad, renderer, frame: frameSafe,   // [debug] 창이 가려져 rAF 가 멈춘 자동화 브라우저에서 프레임을 직접 돌린다
+    setSelfAvatar, craneLoad, renderer, menu, frame: frameSafe,   // [debug] 창이 가려져 rAF 가 멈춘 자동화 브라우저에서 프레임을 직접 돌린다
     diag,
     /** 기록을 요약해서 한눈에 보여준다. 콘솔에서 __g.report() 로 호출. */
     report() {

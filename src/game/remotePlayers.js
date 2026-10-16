@@ -33,7 +33,14 @@ import { GunRig, computeGunMounts } from './gunRig.js';
 // 지연 = 틱 간격(50ms) 이면 도착 직전 k=1 → p(i-1), 도착 직후 k=0 → p(i-1)
 // 으로 위치가 완전히 연속이다. 스냅샷 도착이 조금 늦거나 빠려도 양쪽이
 // 같은 점(p(i-1))으로 클램프되므로 점프가 일어날 수 없다.
-const DELAY = 1 / TICK_HZ;
+// 남의 위치는 이만큼(초) 늦게 그린다 — 받은 위치 몇 개를 쌓아 두고 그 사이를 이어 그린다.
+// 입력 · 방송 박자가 어긋나는 몫(최대 한 틱)과 인터넷 지연 흔들림을 덮는 여유다.
+// 늦게 그리는 시간은 사람마다 따로 맞춘다 — 최근 위치들이 얼마나 늦게 도착했는지 보고, 그중 가장 늦은 것보다
+// 조금 더 늦게 그린다 (연결이 흔들리는 사람만 늦어지고, 좋은 사람은 짧게).
+const INTERP_MIN = 0.06, INTERP_MAX = 0.35, INTERP_PAD = 0.02;
+const INTERP = 2.4 / TICK_HZ;      // 처음 값 (0.12초)
+const EXTRAP = 0.1;                // 위치가 늦게 오면 마지막 속도로 이만큼까지는 이어서 움직인다
+const SNAP_DIST = 6;               // 이보다 멀리 한 번에 옮겨지면(부활 · 스폰) 이어 그리지 않고 바로 옮긴다
 
 // 좀비는 광폭화 때 붉게 물든다. 모델을 두 벌 만들 일이 아니라 색만 바꾸면
 // 되는 것이고, 모델을 갈아끼워도 이 코드는 그대로 쓴다.
@@ -289,7 +296,7 @@ export class RemotePlayers {
   }
 
   /** 서버 스냅샷 반영 */
-  apply(snapshots, myId, serverTime) {
+  apply(snapshots, myId, serverTime, localNow = serverTime) {
     const seen = new Set();
 
     for (const s of snapshots) {
@@ -301,18 +308,31 @@ export class RemotePlayers {
         const role = this.roles.get(s.id) ?? 'survivor';
         const avatar = makeAvatar(role, this.models.get(s.id) ?? avatarModel(role));
         this.scene.add(avatar);
+        const first = { p: new Vector3(...s.p), y: s.y, t: s.pt ?? serverTime };
         e = {
           avatar,
-          from: { p: new Vector3(...s.p), y: s.y, t: serverTime },
-          to: { p: new Vector3(...s.p), y: s.y, t: serverTime },
+          buf: [first],      // 받은 위치 (잰 시각 순) — 최근 몇 개만
+          ages: [],          // 최근 위치가 도착했을 때 얼마나 묵어 있었나 (초)
+          delay: INTERP,     // 이 사람을 얼마나 늦게 그리나
+          from: first,
+          to: first,
           state: s.st, pitch: s.pi, mv: s.mv,
           rage: 0, rageUntil: 0,
         };
         this.list.set(s.id, e);
       }
 
-      e.from = { p: e.to.p.clone(), y: e.to.y, t: e.to.t };
-      e.to = { p: new Vector3(...s.p), y: s.y, t: serverTime };
+      // 잰 시각(pt) 기준으로 쌓는다. 같은 위치가 다시 오면(그 사이 입력이 안 왔다) 버린다
+      const pt = typeof s.pt === 'number' ? s.pt : serverTime;
+      const last = e.buf[e.buf.length - 1];
+      if (pt > last.t + 1e-4) {
+        const p = new Vector3(...s.p);
+        if (p.distanceTo(last.p) > SNAP_DIST) e.buf.length = 0;   // 순간이동 — 이어 그리지 않는다
+        e.buf.push({ p, y: s.y, t: pt });
+        if (e.buf.length > 24) e.buf.shift();
+        e.ages.push(localNow - pt);
+        if (e.ages.length > 40) e.ages.shift();   // 최근 2초쯤
+      }
       e.state = s.st;
       e.pitch = s.pi;
       e.mv = s.mv;
@@ -328,13 +348,26 @@ export class RemotePlayers {
 
   /** 매 프레임 — 위치 보간 + 애니메이션 + 색 */
   update(dt, renderTime) {
-    const t = renderTime - DELAY;
-
     for (const [id, e] of this.list) {
+      // 이 사람 몫의 지연 — 늘릴 땐 빨리(끊김을 바로 막는다), 줄일 땐 천천히(속도가 출렁이지 않게)
+      if (e.ages.length) {
+        const want = Math.max(INTERP_MIN, Math.min(INTERP_MAX, Math.max(...e.ages) + INTERP_PAD));
+        e.delay += (want - e.delay) * Math.min(1, dt * (want > e.delay ? 8 : 0.5));
+      }
+      const t = renderTime - e.delay;
+      // 그릴 시각(t)을 사이에 둔 두 위치를 찾는다. 마지막 것보다 늦으면 잠깐(EXTRAP) 이어서 민다
+      const b = e.buf, n = b.length;
+      let j = n - 1;
+      while (j > 0 && b[j - 1].t > t) j--;
+      e.from = b[Math.max(0, j - 1)];
+      e.to = b[j];
+      if (t >= b[n - 1].t && n >= 2) { e.from = b[n - 2]; e.to = b[n - 1]; }
       const span = e.to.t - e.from.t;
-      const k = span > 0.0001 ? Math.max(0, Math.min(1, (t - e.from.t) / span)) : 1;
+      let k = span > 0.0001 ? (t - e.from.t) / span : 1;
+      k = Math.max(0, Math.min(k, 1 + (span > 0.0001 ? EXTRAP / span : 0)));
 
       e.avatar.position.lerpVectors(e.from.p, e.to.p, k);
+      const kk = Math.min(1, k);   // 방향 · 속도는 넘겨 짐작하지 않는다
       // 죽은 몸은 Dying 끝 자세로 누워 있다 (avatarAnim) — 모델이 없으면(캡슐) 감춘다
       e.avatar.visible = e.state !== PSTATE.DEAD || !!e.avatar.userData.anim;
 
@@ -352,7 +385,7 @@ export class RemotePlayers {
       // 몸 방향 — 내 3인칭 몸(main.js)과 같은 규칙. 달릴 땐 이동 방향을 보고,
       // 서 있거나 공격·활 조준 중이면 시선 방향을 본다. 시선만 따라가면
       // 옆·뒤로 움직일 때 앞으로 달리는 클립이 옆으로 미끄러져 보인다.
-      const lookYaw = lerpAngle(e.from.y, e.to.y, k);
+      const lookYaw = lerpAngle(e.from.y, e.to.y, kk);
       if (!anim) {
         e.avatar.rotation.y = lookYaw;
       } else {
@@ -372,7 +405,7 @@ export class RemotePlayers {
       if (e.pendingSlam != null) {
         if ((e.mv & MV.AIR) || e.state !== PSTATE.ALIVE) {
           e.pendingSlam = null;        // 새 점프가 시작됐거나 상태가 바뀌면 취소
-        } else if (t >= e.to.t - 1e-4 && anim) {
+        } else if (t >= e.buf[e.buf.length - 1].t - 1e-4 && anim) {
           anim.trigger('slam', e.pendingSlam);
           e.pendingSlam = null;
         }

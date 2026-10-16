@@ -61,8 +61,14 @@ export class Net {
         this.config = m.config;
         this.classes = m.classes ?? [];
       }
-      if (typeof m.t === 'string' && m.serverNow) {
-        this.clockOffset = m.serverNow - Date.now() / 1000;
+      // 서버 시계 맞추기 — 받을 때마다 (서버 시각 - 내 시각) 을 잰다. 값은 지연만큼 작게 나오므로
+      // 지연이 가장 짧았던 쪽(큰 값)으로 빨리, 반대쪽으론 아주 천천히(시계가 흐르는 만큼만) 따라간다.
+      // 예전엔 라운드 시작 때 한 번 잰 값을 그대로 써서, 그 순간의 지연이 판 내내 남았다.
+      const sn = m.serverNow ?? (m.t === 'state' ? m.now : undefined);
+      if (typeof m.t === 'string' && typeof sn === 'number') {
+        const sample = sn - Date.now() / 1000;
+        if (!this._synced) { this.clockOffset = sample; this._synced = true; }
+        else this.clockOffset += (sample - this.clockOffset) * (sample > this.clockOffset ? 0.25 : 0.01);
       }
       this.emit(m.t, m);
     };
