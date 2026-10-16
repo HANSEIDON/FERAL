@@ -366,6 +366,7 @@
   .cta.ghost:hover { background: #ffffff18; }
 
   /* 수락 확인 */
+  #pausePanel .plive { margin: 18px 0 0; max-width: 300px; font: 13px/1.5 'Noto Sans KR', sans-serif; color: var(--steel); }
   #rcheck { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; background: #000000b0; backdrop-filter: blur(3px); }
   #rcheck.on { display: grid; animation: rcIn .25s ease-out; }
   @keyframes rcIn { from { opacity: 0; transform: scale(1.04); } }
@@ -388,6 +389,7 @@
   #practiceBox .inner { padding: 6px 2px 0; }
   .prow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #ffffff10; }
   .prow label { width: 76px; flex: none; font: 12px 'Noto Sans KR', sans-serif; color: var(--steel); }
+  #gfx { background: #0c0f14; border: 1px solid #ffffff1f; color: #e8e3da; padding: 6px 8px; font: inherit; }
   .prow select { flex: 1; min-width: 0; background: #0c0f14; border: 1px solid #ffffff1f; color: #e8e3da; padding: 6px 8px;
                  font: 12.5px 'Noto Sans KR', sans-serif; }
   #pStart { margin-top: 10px; font-size: 16px; padding: 12px 16px; }
@@ -483,6 +485,8 @@
               <input type="range" id="vol_sfx" min="0" max="100" step="1"><span id="vol_sfxVal" class="vval"></span></div>
             <div class="opt"><label data-i18n="volMusic"></label>
               <input type="range" id="vol_music" min="0" max="100" step="1"><span id="vol_musicVal" class="vval"></span></div>
+            <div class="opt"><label data-i18n="gfx"></label>
+              <select id="gfx"><option value="low" data-i18n="gfx.low"></option><option value="medium" data-i18n="gfx.medium"></option><option value="high" data-i18n="gfx.high"></option></select></div>
             <p class="note" data-i18n="settingsNote"></p>
           </div>
         </div>
@@ -591,6 +595,7 @@
         <button class="mi" id="pResume" data-i18n="resume"></button>
         <button class="mi" id="pSettings" data-sfx="whoosh" data-i18n="settings"></button>
         <button class="mi" id="pEnd" data-i18n="endPractice"></button>
+        <p class="plive" id="pLive" data-i18n="pauseLive"></p>
       </div>
       <div class="view" id="pauseSettings" data-settings="1">
         <div id="settingsSlotPause"></div>

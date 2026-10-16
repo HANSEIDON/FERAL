@@ -78,7 +78,20 @@ try {
   diagShow('WebGL 을 사용할 수 없습니다.\n브라우저 설정에서 "하드웨어 가속" 을 켜고 다시 시작해 주세요.\n(' + (err?.message ?? err) + ')');
   throw err;
 }
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// 그래픽 설정 — 발열의 큰 원인은 해상도(고해상도 노트북은 픽셀이 2~4배)와 프레임 수(144Hz 화면이면 초당 144번)다.
+// 보통: 화면 배율 1 · 60fps 상한. 메뉴 · 대기실에선 설정과 상관없이 30fps 로 그린다.
+const GFX = { low: { dpr: 0.75, fps: 45 }, medium: { dpr: 1, fps: 60 }, high: { dpr: 2, fps: 0 } };
+let gfx = (() => { try { return localStorage.getItem('zfps.gfx'); } catch { return null; } })();
+if (!GFX[gfx]) gfx = 'medium';
+function applyGfx(name) {
+  if (!GFX[name]) return;
+  gfx = name;
+  try { localStorage.setItem('zfps.gfx', name); } catch { /* 저장 못 해도 이번엔 적용 */ }
+  renderer.setPixelRatio(Math.min(devicePixelRatio, GFX[gfx].dpr));
+  sized = '';   // 다음 프레임에 크기를 다시 맞춘다
+}
+let sized = '';
+renderer.setPixelRatio(Math.min(devicePixelRatio, GFX[gfx].dpr));
 renderer.outputColorSpace = SRGBColorSpace;
 renderer.toneMapping = ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.35;
@@ -404,6 +417,7 @@ const audio = new Audio();
 // 시작 화면 · 메인 메뉴 · 대기실(캐릭터 선택) · 일시정지 (src/ui/menu.js)
 const menu = new Menu({
   net, input, sound: audio,
+  gfx, onGfx: (name) => applyGfx(name),
   onEndPractice: () => net.send(C.ACTION, { kind: 'endPractice' }),
   onSound: (kind) => audio.ui(kind),
   // 배경 음악은 메뉴 · 대기실에서만 (라운드에 들어가면 줄어들며 꺼진다)
@@ -604,6 +618,8 @@ net.on(S.STATE, (m) => {
 net.on(S.EVENT, (m) => {
   switch (m.kind) {
     case 'check':
+      // 연습 중에 누가 게임 시작을 누르면 — 마우스를 풀어 수락 창을 누를 수 있게
+      if (!m.cancel && !m.done && m.ids?.includes(net.id) && input.locked) input.unlock();
       menu.readyCheck(m);
       break;
     case 'hit':
@@ -1467,7 +1483,10 @@ function tryPickupAmmo() {
 
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (canvas.width === w && canvas.height === h) return;
+  // canvas.width 와 비교하면 화면 배율이 1이 아닐 때(대부분 노트북) 늘 달라서 매 프레임 그림판을 새로 만들었다 — 발열 원인
+  const key = `${w}x${h}@${renderer.getPixelRatio()}`;
+  if (key === sized) return;
+  sized = key;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -1503,7 +1522,14 @@ function frameSafe(t) {
     __dbgPost('frame', (err?.stack ?? err).toString());   // [debug]
   }
 }
-renderer.setAnimationLoop(frameSafe);
+// 프레임 상한 — 설정값, 메뉴가 떠 있으면 30
+let lastDraw = 0;
+renderer.setAnimationLoop((now) => {
+  const cap = menu.screen ? 30 : GFX[gfx].fps;
+  if (cap && now - lastDraw < 1000 / cap - 1.5) return;
+  lastDraw = now;
+  frameSafe(now);
+});
 
 // 개발 편의: 콘솔에서 상태를 들여다보고 전투를 직접 호출할 수 있게.
 // (포인터락이 막힌 환경에서 전투를 검증할 때 쓴다)
@@ -1511,7 +1537,7 @@ Object.assign(globalThis, {
   __g: {
     net, me, others, G, weapon, revive, fx, audio, camera, boxes, input, hud, view, scene,
     get self() { return selfAvatar; },
-    setSelfAvatar, craneLoad, frame: frameSafe,   // [debug] 창이 가려져 rAF 가 멈춘 자동화 브라우저에서 프레임을 직접 돌린다
+    setSelfAvatar, craneLoad, renderer, frame: frameSafe,   // [debug] 창이 가려져 rAF 가 멈춘 자동화 브라우저에서 프레임을 직접 돌린다
     diag,
     /** 기록을 요약해서 한눈에 보여준다. 콘솔에서 __g.report() 로 호출. */
     report() {

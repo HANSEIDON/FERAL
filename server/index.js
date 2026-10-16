@@ -97,6 +97,7 @@ class Player {
     this.yaw = 0;
     this.pitch = 0;
     this.mv = 0;           // 이동 플래그 비트 (애니메이션용)
+    this.mvPulse = 0;      // 방송 사이에 한 번이라도 켜졌던 짧은 비트 (주먹 FIRE · 점프 AIR) — 아래 설명
     this.seq = 0;
 
     this.downedAt = 0;
@@ -116,7 +117,7 @@ class Player {
     return {
       id: this.id, p: this.pos.map((v) => +v.toFixed(2)),
       y: +this.yaw.toFixed(3), pi: +this.pitch.toFixed(3),
-      mv: this.mv, hp: Math.round(this.hp), mhp: this.maxHp, st: this.state,
+      mv: this.mv | this.mvPulse, hp: Math.round(this.hp), mhp: this.maxHp, st: this.state,
     };
   }
 
@@ -145,7 +146,9 @@ function sendLobby() {
     // 띄울지 판단하려면 지금 서버가 어느 단계인지 알아야 한다.
     phase: game.phase,
     players: joinedPlayers().map((p) => p.lobbyInfo()),
-    canStart: joinedPlayers().length >= ROUND.minPlayers && game.phase === PHASE.LOBBY && !game.check,
+    // 누가 연습 중이어도 게임 시작은 된다 — 수락 확인이 연습하는 사람에게도 뜨고, 전원 수락하면 연습을 끝내고 시작한다
+    canStart: joinedPlayers().length >= ROUND.minPlayers && !game.check && (game.phase === PHASE.LOBBY || (game.phase === PHASE.PLAYING && game.practice)),
+    practiceBy: game.phase === PHASE.PLAYING && game.practice ? joinedPlayers().filter((q) => q.role).map((q) => q.name).join(', ') : '',
     // 연습은 혼자서도 된다
     canPractice: joinedPlayers().length >= 1 && game.phase === PHASE.LOBBY && !game.check,
   });
@@ -164,8 +167,9 @@ function sendLobby() {
 function startRound(opts = {}) {
   bots.clear();
 
-  const list = joinedPlayers();
   const practice = !!opts.practice;
+  // 연습은 누른 사람 혼자 — 대기실에 있던 다른 사람은 끌려 들어가지 않는다
+  const list = practice ? [opts.starter ?? joinedPlayers()[0]].filter(Boolean) : joinedPlayers();
   if (!practice && list.length < ROUND.minPlayers) return;
   if (!list.length) return;
 
@@ -258,7 +262,7 @@ function startRound(opts = {}) {
   const roles = everyone().map((q) => ({ id: q.id, role: q.role, bot: !!q.isBot, classId: q.classId }));
 
   for (const p of players.values()) {
-    if (!p.joined) continue;   // 첫 화면에 있는 사람은 대기실에 들어올 때 관전으로 붙는다
+    if (!list.includes(p)) continue;   // 판에 안 낀 사람(첫 화면 · 대기실에서 기다리는 사람)은 대기실에 남는다
     p.send(S.ROUND, {
       phase: game.phase, practice,
       startAt: game.startAt, endAt: game.endAt, serverNow: t,
@@ -434,7 +438,7 @@ function tick(dt) {
 
 function broadcastState() {
   const t = now();
-  broadcast(S.STATE, {
+  const snap = {
     now: +t.toFixed(3),
     phase: game.phase,
     left: game.phase === PHASE.PLAYING ? Math.max(0, +(game.endAt - t).toFixed(1)) : 0,
@@ -442,7 +446,9 @@ function broadcastState() {
     players: everyone()
       .filter((p) => p.state !== PSTATE.SPECTATING)
       .map((p) => p.snapshot()),
-  });
+  };
+  broadcast(S.STATE, snap);
+  for (const p of players.values()) p.mvPulse = 0;
 }
 
 setInterval(() => {
@@ -506,7 +512,9 @@ function onMessage(p, m) {
     }
 
     case C.START: {
-      if (game.phase !== PHASE.LOBBY || game.check || !p.joined) return;
+      if (game.check || !p.joined) return;
+      const practicing = game.phase === PHASE.PLAYING && game.practice;
+      if (game.phase !== PHASE.LOBBY && !(practicing && !m.practice)) return;
       if (m.practice) {
         startRound({
           practice: true, starter: p,
@@ -534,6 +542,7 @@ function onMessage(p, m) {
       if (c.accepted.size < c.ids.size) { sendCheck(); return; }
       game.check = null;
       broadcast(S.EVENT, { kind: 'check', done: true });
+      if (game.phase === PHASE.PLAYING && game.practice) { log('연습을 끝내고 게임 시작'); toLobby(); }
       startRound();
       break;
     }
@@ -547,6 +556,10 @@ function onMessage(p, m) {
       p.yaw = Number(m.yaw) || 0;
       p.pitch = Number(m.pitch) || 0;
       p.mv = m.mv | 0;
+      // 입력(20Hz)과 방송(20Hz)은 박자가 안 맞는다. 인터넷에선 입력 둘이 방송 사이에 몰려 오기도 해서,
+      // 0.1초짜리 클릭(FIRE)이나 짧은 점프(AIR)가 다음 입력에 덮여 남의 화면에 아예 안 보였다.
+      // 방송 전까지 한 번이라도 켜진 건 모아서 보낸다 (방송 뒤에 비운다)
+      p.mvPulse |= p.mv & (MV.FIRE | MV.AIR);
       break;
     }
 
@@ -865,8 +878,8 @@ wss.on('connection', (ws, req) => {
     if (game.phase !== PHASE.PLAYING) { sendLobby(); return; }
 
     if (game.practice) {
-      // 연습하던 사람이 나가면 그냥 정리한다
-      if (!players.size) toLobby();
+      // 연습하던 사람이 나가면 정리한다 (대기실에서 기다리던 사람은 그대로)
+      if (!joinedPlayers().some((q) => q.role)) toLobby();
       else sendLobby();
     } else if (p.role === 'zombie') {
       endRound('survivor', '좀비가 나감');

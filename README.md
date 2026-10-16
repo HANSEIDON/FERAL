@@ -70,7 +70,9 @@ If the zombie hits you while you're down, you bleed out faster.
 | Space | Jump | Jump | Tap to jump. Hold, then release to super jump |
 | Hold F | CPR on a downed teammate | CPR on a downed teammate | |
 
-The settings menu has mouse sensitivity, volume, and a Korean/English toggle. You can also start a solo practice round against bots from the lobby.
+The settings menu has mouse sensitivity, volume, graphics quality, and a Korean/English toggle. If your laptop runs hot, set graphics to Low.
+
+You can start a solo practice round against bots from the lobby. Practice only puts you in the game; anyone else in the lobby can still start a real match, and you'll get the ready check too.
 
 ## PLAY NOW
 <p align="center">
@@ -80,6 +82,10 @@ The settings menu has mouse sensitivity, volume, and a Korean/English toggle. Yo
 <p align="center">
   <a href="https://feralfps.duckdns.org:8443">
     <img src="https://img.shields.io/badge/▶_PLAY_NOW-B22222?style=for-the-badge" height="40">
+  </a>
+  &nbsp;
+  <a href="https://hanseidon.itch.io/feral">
+    <img src="https://img.shields.io/badge/itch.io-FERAL-FA5C5C?style=for-the-badge&logo=itchdotio&logoColor=white" height="40">
   </a>
 </p>
 
@@ -111,6 +117,8 @@ The `deploy/` folder has scripts for an Ubuntu box:
 - `setup.sh`: Node 22, Caddy for automatic HTTPS, and a systemd service
 - `update.sh`: swaps in a new build
 - `gcp.sh`: does the same steps from Google Cloud Shell
+
+For itch.io, `npm run pack:itch` builds just the client with the game server's address baked in and zips it to `~/Downloads/feral-itch.zip` (pass a different `wss://…/ws` address to point it elsewhere). The round-start music is left out of that build.
 
 ## Project layout
 

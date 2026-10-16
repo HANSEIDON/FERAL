@@ -20,7 +20,9 @@ const HEROES = { archer: 'hunter', default: 'swat' };
 const BEHAVIORS = { survivor: ['hunt', 'still', 'chase', 'flee'], zombie: ['still', 'flee'] };
 
 export class Menu {
-  constructor({ net, input, sound, onEndPractice, onScreen, onSound }) {
+  constructor({ net, input, sound, onEndPractice, onScreen, onSound, gfx, onGfx }) {
+    this.gfx = gfx;
+    this.onGfx = onGfx;
     this.net = net;
     this.input = input;
     this.sound = sound;
@@ -64,6 +66,7 @@ export class Menu {
 
   showPause(practice) {
     $('pEnd').style.display = practice ? '' : 'none';
+    $('pLive').style.display = practice ? 'none' : '';   // 멀티에선 일시정지돼도 판은 계속 돈다
     this._pausePanel('pauseList');
     this.show('pause');
   }
@@ -122,6 +125,9 @@ export class Menu {
     showVal();
     // 움직이는 즉시 반영된다 — 게임 중 Esc 로 열어 맞추기 좋게
     sens.oninput = () => { this.input.setSensitivity(+sens.value); showVal(); };
+    const gfx = $('gfx');
+    gfx.value = this.gfx ?? 'medium';
+    gfx.onchange = () => this.onGfx?.(gfx.value);
     inv.onchange = () => this.input.setInvertY(inv.checked);
 
     // 소리 크기 — 전체 · 효과음 · 음악 (0~100)
@@ -169,6 +175,8 @@ export class Menu {
     localStorage.setItem('zfps.name', name);
     this.joined = true;
     this.net.send(C.JOIN, { name });
+    // 게임을 찾았을 때 다른 창을 보고 있어도 알 수 있게 — 알림 허락은 클릭 순간에만 물을 수 있다
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
   }
 
   /** 재접속 때 다시 입장한다 */
@@ -207,7 +215,12 @@ export class Menu {
     }).join('');
     const start = $('lStart');
     start.disabled = !msg.canStart;
-    start.querySelector('small').textContent = msg.canStart ? '' : t('needPlayers');
+    // 지금 서버에서 판이 돌고 있으면 무슨 상태인지 알려 준다
+    const busy = msg.phase && msg.phase !== 'lobby';
+    start.querySelector('small').textContent = msg.practiceBy
+      ? t('lobby.practicing', { name: msg.practiceBy })
+      : busy ? t('lobby.inProgress')
+      : msg.canStart ? '' : t('needPlayers');
     $('pStart').disabled = !msg.canPractice;
   }
 
@@ -216,6 +229,7 @@ export class Menu {
     const box = $('rcheck'), me = this.net.id;
     clearInterval(this._rcTimer);
     if (m.cancel || m.done) {
+      this._alertStop();
       box.classList.remove('on', 'waiting');
       if (m.cancel) {
         const st = $('lStart').querySelector('small');
@@ -225,7 +239,7 @@ export class Menu {
       return;
     }
     if (!m.ids.includes(me)) return;   // 확인이 시작된 뒤에 들어온 사람은 구경만
-    if (!box.classList.contains('on')) { box.classList.add('on'); this.sound?.ui('whoosh'); }
+    if (!box.classList.contains('on')) { box.classList.add('on'); this.sound?.ui('whoosh'); this._alert(m.left); }
     const mine = m.accepted.includes(me);
     box.classList.toggle('waiting', mine);
     $('rcDots').innerHTML = m.ids.map((_, i) => `<b class="${i < m.accepted.length ? 'ok' : ''}"></b>`).join('');
@@ -235,6 +249,34 @@ export class Menu {
     const tick = () => { bar.style.transform = `scaleX(${Math.max(0, (end - performance.now()) / (m.total * 1000))})`; };
     tick();
     this._rcTimer = setInterval(tick, 50);
+  }
+
+  /** 다른 창 · 탭을 보고 있을 때 — 탭 제목을 깜빡이고, 허락했으면 시스템 알림을 띄운다 */
+  _alert(left) {
+    this._alertStop();
+    if (!document.hidden && document.hasFocus()) return;
+    const base = document.title, msg = t('check.found');
+    let on = false;
+    this._blink = setInterval(() => { document.title = (on = !on) ? `▶ ${msg}` : base; }, 700);
+    this._blinkBase = base;
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        const n = new Notification('FERAL', { body: t('check.notify', { s: Math.ceil(left) }), icon: './ui/char_zombie.webp', requireInteraction: true });
+        n.onclick = () => { window.focus(); n.close(); };
+        this._note = n;
+      }
+    } catch { /* 알림을 못 띄우는 환경 */ }
+    window.focus();
+    const back = () => { this._alertStop(); removeEventListener('focus', back); };
+    addEventListener('focus', back);
+  }
+
+  _alertStop() {
+    clearInterval(this._blink);
+    this._blink = null;
+    if (this._blinkBase) { document.title = this._blinkBase; this._blinkBase = null; }
+    this._note?.close();
+    this._note = null;
   }
 
   // ---------------------------------------------------------------- 대기실
